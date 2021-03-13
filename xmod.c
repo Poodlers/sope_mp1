@@ -7,7 +7,7 @@
 #include <pwd.h>
 #include <sys/stat.h>
 
-int set_changes_mode_int(int** changes,int length, char* mode){
+char* set_changes_mode_int(int** changes,int length, char* mode){
     printf("%s",mode);
     int index = 0;
     free(*changes);
@@ -42,7 +42,7 @@ int set_changes_mode_int(int** changes,int length, char* mode){
                         break;
                     default:
                         //invalid mode
-                        return -1;
+                        return "-1";
                 
                 }
                 break;
@@ -74,7 +74,7 @@ int set_changes_mode_int(int** changes,int length, char* mode){
                         break;
                      default:
                         //invalid mode
-                        return -1;
+                        return "-1";
                 
                 }
                 break;
@@ -106,7 +106,7 @@ int set_changes_mode_int(int** changes,int length, char* mode){
                         break;
                      default:
                         //invalid mode
-                        return -1;
+                        return "-1";
                 
                  }
                  break;
@@ -114,18 +114,59 @@ int set_changes_mode_int(int** changes,int length, char* mode){
             index++;
                 
         }
-        return 0;
+        return "0";
 }
 
-int set_changes_mode_str(int** changes,int length, char* str){
-    if(str[0] != '-'){
-        return -1;
+struct Perms{
+    char* perm;
+    char* octal_mode;
+};
+
+
+void build_Perms(struct Perms** perms_arr,int length){
+    *perms_arr = malloc(length * sizeof(struct Perms));
+    if(*perms_arr == NULL) return;
+
+    struct Perms mode1;
+    strcpy(mode1.perm, "ur");
+    strcpy(mode1.octal_mode, "400");
+    (*perms_arr)[0] = mode1;
+
+    struct Perms mode2;
+    strcpy(mode2.perm, "uw");
+    strcpy(mode2.octal_mode, "200");
+    (*perms_arr)[1] = mode2;
+
+}
+
+char* set_changes_mode_str(char* str){
+    struct Perms* perms_arr;
+    build_Perms(&perms_arr,28);
+    if(str[0] != 'u' && str[0] != 'g' && str[0] != 'o' && str[0] != 'a' ){
+        return "-1";
     }
-    int index = 1;
+    if(str[1] != '=' && str[1] != '-' && str[1] != '+'){
+        return "-1"; //command is formmatted incorectly
+    }
+    int index = 2;
+    char mode[4];
+    mode[0] = str[0];
     while(str[index] != '\0'){
-        
+        if(index == 5) return "-1"; //invalid mode
+        mode[index - 1] = str[index];
+        index++;
     }
-    return 0;
+    char* octal_mode;
+
+    for(int i = 0; i < 28;i++){
+        if(strcmp(perms_arr[i].perm,mode) == 0 ){
+            strcpy(octal_mode,perms_arr[i].octal_mode);
+            break;
+        }
+    }
+    free(perms_arr);
+    return octal_mode;
+
 }
 
 int main(int argc, char *argv[] ){
@@ -139,17 +180,21 @@ int main(int argc, char *argv[] ){
     struct passwd *pwd;
     int status;
     printf("%s\n", filename);
-    int valid_mode;
     
+    char* valid_mode;
+    char* failed_mode = "-1";
 
     if(atoi(argv[1]) == 0){  //if atoi fails, then its a mode specified with letters
-        valid_mode = set_changes_mode_str(&changes,3,mode);
+        valid_mode = set_changes_mode_str(mode);
+        if(strcmp(valid_mode,failed_mode) != 0){
+            set_changes_mode_int(&changes,3,valid_mode);
+        }
 
     }else{
         valid_mode = set_changes_mode_int(&changes,3,mode);
     }
 
-    if(valid_mode == -1){
+    if(strcmp(valid_mode,failed_mode) == 0){
         printf("Invalid mode! \n");
         return -1;
     }
