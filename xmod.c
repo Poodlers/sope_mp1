@@ -13,160 +13,172 @@ char* set_changes_mode_int(int** changes,int length, char* mode){
     free(*changes);
     *changes = (int*)malloc(length * sizeof(int));
     while(mode[index] != '\0'){
-        switch(index){
-            case 0:
-                switch (mode[index])
-                {
-                    case '0':
-                        (*changes)[0] = 0;
-                        break;
-                    case '1':
-                        (*changes)[0] = S_IXUSR;
-                        break;
-                    case '2':
-                        (*changes)[0] = S_IWUSR;
-                        break;
-                    case '3':
-                        (*changes)[0] = S_IWUSR | S_IXUSR;
-                    case '4':
-                        (*changes)[0] = S_IRUSR;
-                        break;
-                    case '5':
-                        (*changes)[0] = S_IRUSR | S_IXUSR;
-                        break;
-                    case '6':
-                        (*changes)[0] = S_IRUSR | S_IWUSR;
-                        break;
-                    case '7':
-                        (*changes)[0] = S_IXUSR | S_IRUSR | S_IWUSR;
-                        break;
-                    default:
-                        //invalid mode
-                        return "-1";
-                
-                }
+        if(index > 2) return "-1"; 
+        switch (mode[index]){
+            case '0':
+                (*changes)[index] = 0;
                 break;
-            case 1:
-                switch (mode[index])
-                {
-                    case '0':
-                        (*changes)[1] = 0;
-                        break;
-                    case '1':
-                        (*changes)[1] = S_IXGRP;
-                        break;
-                    case '2':
-                        (*changes)[1] = S_IWGRP;
-                        break;
-                    case '3':
-                        (*changes)[1] = S_IWGRP | S_IXGRP;
-                    case '4':
-                        (*changes)[1] = S_IRGRP;
-                        break;
-                    case '5':
-                        (*changes)[1] = S_IRGRP | S_IXGRP;
-                        break;
-                    case '6':
-                        (*changes)[1] = S_IRGRP | S_IWGRP;
-                        break;
-                    case '7':
-                        (*changes)[1] = S_IXGRP | S_IRGRP | S_IWGRP;
-                        break;
-                     default:
-                        //invalid mode
-                        return "-1";
-                
-                }
+            case '1':
+                (*changes)[index] = S_IXUSR;
                 break;
-            case 2:
-                switch (mode[index])
-                {
-                    case '0':
-                        (*changes)[2] = 0;
-                        break;
-                    case '1':
-                        (*changes)[2] = S_IXOTH;
-                        break;
-                    case '2':
-                        (*changes)[2] = S_IWOTH;
-                        break;
-                    case '3':
-                        (*changes)[2] = S_IWOTH | S_IXOTH;
-                    case '4':
-                        (*changes)[2] = S_IROTH;
-                        break;
-                    case '5':
-                        (*changes)[2] = S_IROTH | S_IXOTH;
-                        break;
-                    case '6':
-                        (*changes)[2] = S_IROTH | S_IWOTH;
-                        break;
-                    case '7':
-                        (*changes)[2] = S_IXOTH | S_IROTH | S_IWOTH;
-                        break;
-                     default:
-                        //invalid mode
-                        return "-1";
-                
-                 }
-                 break;
-                }
-            index++;
-                
+            case '2':
+                (*changes)[index] = S_IWUSR;
+                break;
+            case '3':
+                (*changes)[index] = S_IWUSR | S_IXUSR;
+            case '4':
+                (*changes)[index] = S_IRUSR;
+                break;
+            case '5':
+                (*changes)[index] = S_IRUSR | S_IXUSR;
+                break;
+            case '6':
+                (*changes)[index] = S_IRUSR | S_IWUSR;
+                break;
+            case '7':
+                (*changes)[index] = S_IXUSR | S_IRUSR | S_IWUSR;
+                break;
+            default:
+                //invalid mode
+                return "-1";
         }
-        return "0";
+        index++;
+    }
+    return "0";
 }
 
 struct Perms{
-    char* perm;
-    char* octal_mode;
+    char perm[4];
+    int octal_mode;
 };
 
+int getCurrentPerms(char* file){
+    struct stat st;
+    int perms = 0;
+    int *modeval = malloc(sizeof(int) * 9);
+    if(stat(file, &st) == 0){
+        mode_t perm = st.st_mode;
+        modeval[0] = (perm & S_IRUSR) ? 100000000 : 0;
+        modeval[1] = (perm & S_IWUSR) ? 10000000 : 0;
+        modeval[2] = (perm & S_IXUSR) ? 100 : 0;
+        modeval[3] = (perm & S_IRGRP) ? 40 : 0;
+        modeval[4] = (perm & S_IWGRP) ? 20 : 0;
+        modeval[5] = (perm & S_IXGRP) ? 10 : 0;
+        modeval[6] = (perm & S_IROTH) ? 100 : 0;
+        modeval[7] = (perm & S_IWOTH) ? 10 : 0;
+        modeval[8] = (perm & S_IXOTH) ? 1 : 0;  
+    } 
+    for(int i = 0; i < 9; i++){
+	
+		perms = perms + modeval[i];
+    }
+    printf(" Perms already in file: %d\n", perms);
+    return perms;
+}
 
+
+/// Creates an array with the valid combination of rwx operations
 void build_Perms(struct Perms** perms_arr,int length){
     *perms_arr = malloc(length * sizeof(struct Perms));
     if(*perms_arr == NULL) return;
-
     struct Perms mode1;
-    strcpy(mode1.perm, "ur");
-    strcpy(mode1.octal_mode, "400");
+    
+    mode1.perm[0] = 'r';
+    mode1.perm[1] = '\0';
+    mode1.octal_mode = 4;
     (*perms_arr)[0] = mode1;
 
     struct Perms mode2;
-    strcpy(mode2.perm, "uw");
-    strcpy(mode2.octal_mode, "200");
+    mode2.perm[0] = 'w';
+    mode2.perm[1] = '\0';
+    mode2.octal_mode = 10;
     (*perms_arr)[1] = mode2;
 
+    struct Perms mode3;
+    mode3.perm[0] = 'x';
+    mode3.perm[1] = '\0';
+    mode3.octal_mode = 1;
+    (*perms_arr)[2] = mode3;
+
+    struct Perms mode4; 
+    mode4.perm[0]=  'r';
+    mode4.perm[1]=  'w';
+    mode4.perm[2]=  '\0';
+    mode4.octal_mode = 110;
+    (*perms_arr)[3] = mode4;
+
+    struct Perms mode5;
+    mode5.perm[0]=  'r';
+    mode5.perm[1]=  'x';
+    mode5.perm[2]=  '\0';
+	mode5.octal_mode = 011;
+	(*perms_arr)[4] = mode5;
+
+    struct Perms mode6; 
+    mode6.perm[0]=  'r';
+    mode6.perm[1]=  'w';
+    mode6.perm[2]=  'x';
+    mode6.perm[3]=  '\0';
+    mode6.octal_mode = 111;
+    (*perms_arr)[5] = mode6;
+
+    struct Perms mode7; 
+    mode7.perm[0]=  'w';
+    mode7.perm[1]=  'x';
+    mode7.perm[2]=  '\0';
+    mode7.octal_mode = 101;
+    (*perms_arr)[6] = mode7;
 }
 
-char* set_changes_mode_str(char* str){
+char* set_changes_mode_str(char* str, char* file){
     struct Perms* perms_arr;
-    build_Perms(&perms_arr,28);
+    int length = 7;
+    build_Perms(&perms_arr,length);
     if(str[0] != 'u' && str[0] != 'g' && str[0] != 'o' && str[0] != 'a' ){
         return "-1";
     }
     if(str[1] != '=' && str[1] != '-' && str[1] != '+'){
         return "-1"; //command is formmatted incorectly
     }
+
+    int perms = -1;
     int index = 2;
     char mode[4];
-    mode[0] = str[0];
     while(str[index] != '\0'){
         if(index == 5) return "-1"; //invalid mode
-        mode[index - 1] = str[index];
+        mode[index - 2] = str[index];
         index++;
     }
-    char* octal_mode;
-
-    for(int i = 0; i < 28;i++){
+    mode[index-2] = '\0';
+    //iterar pelo array de perms possiveis e verificar se o mode está lá dentro
+    for(int i = 0; i < length;i++){
         if(strcmp(perms_arr[i].perm,mode) == 0 ){
-            strcpy(octal_mode,perms_arr[i].octal_mode);
-            break;
+            perms = perms_arr[i].octal_mode;
         }
     }
+    printf("%d\n",perms);
+    if(str[0] == 'u') perms = perms * 100;
+    else if(str[0] == 'g') perms = perms * 10;
+    else if(str[0] == 'a') perms = perms * 111;
+    printf("Perms after user insert gotdamn: %d\n",perms);
+    if(perms == -1){
+        return "-1";
+    }
+    if(str[1] == '+'){
+        //add the new permissions to already existant ones
+        //lets read the current perms
+        printf("%d perms + bef\n", perms);
+        perms |= getCurrentPerms(file);
+        printf("%d perms + aft\n", perms);
+	}else if(str[1] == '-'){
+        perms ^= getCurrentPerms(file);
+        printf("%d perms -\n", perms);
+    }
+
+    char* octal_mode;
+    sprintf(octal_mode, "%d", perms);
     free(perms_arr);
     return octal_mode;
-
 }
 
 int main(int argc, char *argv[] ){
@@ -180,12 +192,15 @@ int main(int argc, char *argv[] ){
     struct passwd *pwd;
     int status;
     printf("%s\n", filename);
-    
+
     char* valid_mode;
     char* failed_mode = "-1";
 
+    printf("%s\n", mode);
+
     if(atoi(argv[1]) == 0){  //if atoi fails, then its a mode specified with letters
-        valid_mode = set_changes_mode_str(mode);
+        printf("text mode\n");
+        valid_mode = set_changes_mode_str(mode,filename);
         if(strcmp(valid_mode,failed_mode) != 0){
             set_changes_mode_int(&changes,3,valid_mode);
         }
@@ -199,7 +214,7 @@ int main(int argc, char *argv[] ){
         return -1;
     }
     
-
+    	
     int final_change = changes[0] | changes[1] | changes[2];
 
     if(chmod(filename, final_change) != 0){
@@ -219,5 +234,3 @@ int main(int argc, char *argv[] ){
     free(changes);
        
 }
-
-     
