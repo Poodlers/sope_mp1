@@ -7,45 +7,6 @@
 #include <pwd.h>
 #include <sys/stat.h>
 
-char* set_changes_mode_int(int** changes,int length, char* mode){
-    printf("%s",mode);
-    int index = 0;
-    free(*changes);
-    *changes = (int*)malloc(length * sizeof(int));
-    while(mode[index] != '\0'){
-        if(index > 2) return "-1"; 
-        switch (mode[index]){
-            case '0':
-                (*changes)[index] = 0;
-                break;
-            case '1':
-                (*changes)[index] = S_IXUSR;
-                break;
-            case '2':
-                (*changes)[index] = S_IWUSR;
-                break;
-            case '3':
-                (*changes)[index] = S_IWUSR | S_IXUSR;
-            case '4':
-                (*changes)[index] = S_IRUSR;
-                break;
-            case '5':
-                (*changes)[index] = S_IRUSR | S_IXUSR;
-                break;
-            case '6':
-                (*changes)[index] = S_IRUSR | S_IWUSR;
-                break;
-            case '7':
-                (*changes)[index] = S_IXUSR | S_IRUSR | S_IWUSR;
-                break;
-            default:
-                //invalid mode
-                return "-1";
-        }
-        index++;
-    }
-    return "0";
-}
 
 struct Perms{
     char perm[4];
@@ -58,21 +19,20 @@ int getCurrentPerms(char* file){
     int *modeval = malloc(sizeof(int) * 9);
     if(stat(file, &st) == 0){
         mode_t perm = st.st_mode;
-        modeval[0] = (perm & S_IRUSR) ? 100000000 : 0;
-        modeval[1] = (perm & S_IWUSR) ? 10000000 : 0;
-        modeval[2] = (perm & S_IXUSR) ? 100 : 0;
-        modeval[3] = (perm & S_IRGRP) ? 40 : 0;
-        modeval[4] = (perm & S_IWGRP) ? 20 : 0;
-        modeval[5] = (perm & S_IXGRP) ? 10 : 0;
-        modeval[6] = (perm & S_IROTH) ? 100 : 0;
-        modeval[7] = (perm & S_IWOTH) ? 10 : 0;
-        modeval[8] = (perm & S_IXOTH) ? 1 : 0;  
+        modeval[0] = (perm & S_IRUSR) ? 0400 : 0;
+        modeval[1] = (perm & S_IWUSR) ? 0200 : 0;
+        modeval[2] = (perm & S_IXUSR) ? 0100 : 0;
+        modeval[3] = (perm & S_IRGRP) ? 040 : 0;
+        modeval[4] = (perm & S_IWGRP) ? 020 : 0;
+        modeval[5] = (perm & S_IXGRP) ? 010 : 0;
+        modeval[6] = (perm & S_IROTH) ? 04 : 0;
+        modeval[7] = (perm & S_IWOTH) ? 02 : 0;
+        modeval[8] = (perm & S_IXOTH) ? 01 : 0;  
     } 
     for(int i = 0; i < 9; i++){
-	
-		perms = perms + modeval[i];
+		perms = perms | modeval[i];
     }
-    printf(" Perms already in file: %d\n", perms);
+    printf(" Perms already in file: %o\n", perms);
     return perms;
 }
 
@@ -85,33 +45,33 @@ void build_Perms(struct Perms** perms_arr,int length){
     
     mode1.perm[0] = 'r';
     mode1.perm[1] = '\0';
-    mode1.octal_mode = 4;
+    mode1.octal_mode = 04;
     (*perms_arr)[0] = mode1;
 
     struct Perms mode2;
     mode2.perm[0] = 'w';
     mode2.perm[1] = '\0';
-    mode2.octal_mode = 10;
+    mode2.octal_mode = 02;
     (*perms_arr)[1] = mode2;
 
     struct Perms mode3;
     mode3.perm[0] = 'x';
     mode3.perm[1] = '\0';
-    mode3.octal_mode = 1;
+    mode3.octal_mode = 01;
     (*perms_arr)[2] = mode3;
 
     struct Perms mode4; 
     mode4.perm[0]=  'r';
     mode4.perm[1]=  'w';
     mode4.perm[2]=  '\0';
-    mode4.octal_mode = 110;
+    mode4.octal_mode = 06;
     (*perms_arr)[3] = mode4;
 
     struct Perms mode5;
     mode5.perm[0]=  'r';
     mode5.perm[1]=  'x';
     mode5.perm[2]=  '\0';
-	mode5.octal_mode = 011;
+	mode5.octal_mode = 05;
 	(*perms_arr)[4] = mode5;
 
     struct Perms mode6; 
@@ -119,33 +79,33 @@ void build_Perms(struct Perms** perms_arr,int length){
     mode6.perm[1]=  'w';
     mode6.perm[2]=  'x';
     mode6.perm[3]=  '\0';
-    mode6.octal_mode = 111;
+    mode6.octal_mode = 07;
     (*perms_arr)[5] = mode6;
 
     struct Perms mode7; 
     mode7.perm[0]=  'w';
     mode7.perm[1]=  'x';
     mode7.perm[2]=  '\0';
-    mode7.octal_mode = 101;
+    mode7.octal_mode = 03;
     (*perms_arr)[6] = mode7;
 }
 
-char* set_changes_mode_str(char* str, char* file){
+int set_changes_mode_str(char* str, char* file){
     struct Perms* perms_arr;
     int length = 7;
     build_Perms(&perms_arr,length);
     if(str[0] != 'u' && str[0] != 'g' && str[0] != 'o' && str[0] != 'a' ){
-        return "-1";
+        return -1;
     }
     if(str[1] != '=' && str[1] != '-' && str[1] != '+'){
-        return "-1"; //command is formmatted incorectly
+        return -1; //command is formmatted incorectly
     }
 
     int perms = -1;
     int index = 2;
     char mode[4];
     while(str[index] != '\0'){
-        if(index == 5) return "-1"; //invalid mode
+        if(index == 5) return -1; //invalid mode
         mode[index - 2] = str[index];
         index++;
     }
@@ -157,33 +117,54 @@ char* set_changes_mode_str(char* str, char* file){
         }
     }
     printf("%d\n",perms);
-    if(str[0] == 'u') perms = perms * 100;
-    else if(str[0] == 'g') perms = perms * 10;
-    else if(str[0] == 'a') perms = perms * 111;
-    printf("Perms after user insert gotdamn: %d\n",perms);
+    if(str[0] == 'u') perms = perms << 6;
+    else if(str[0] == 'g') perms = perms << 3;
+    else if(str[0] == 'a') perms = perms <<6 | perms <<3 | perms;
+    printf("Perms after user insert gotdamn: %o\n",perms);
     if(perms == -1){
-        return "-1";
+        return -1;
     }
     if(str[1] == '+'){
         //add the new permissions to already existant ones
         //lets read the current perms
-        printf("%d perms + bef\n", perms);
+        printf("%o perms + bef\n", perms);
         perms |= getCurrentPerms(file);
-        printf("%d perms + aft\n", perms);
+        printf("%o perms + aft\n", perms);
 	}else if(str[1] == '-'){
         perms ^= getCurrentPerms(file);
-        printf("%d perms -\n", perms);
+        printf("%o perms -\n", perms);
     }
 
-    char* octal_mode;
-    sprintf(octal_mode, "%d", perms);
     free(perms_arr);
-    return octal_mode;
+    return perms;
 }
 
+int is_valid_mode(char* mode){
+    int index = 0;
+    while(mode[index] != '\0'){
+        switch(mode[index]){
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            //nothing happens number is valid
+            break;
+            default:
+                return -1;
+        }
+        index++;
+    }
+    return 0;
+}
+
+
+
 int main(int argc, char *argv[] ){
-    int *changes;
-    changes = NULL;
+    
     char filename[120];
     char mode[120];
     strcpy(mode,argv[1]);
@@ -193,34 +174,36 @@ int main(int argc, char *argv[] ){
     int status;
     printf("%s\n", filename);
 
-    char* valid_mode;
-    char* failed_mode = "-1";
+    int valid_mode;
 
     printf("%s\n", mode);
 
     if(atoi(argv[1]) == 0){  //if atoi fails, then its a mode specified with letters
         printf("text mode\n");
         valid_mode = set_changes_mode_str(mode,filename);
-        if(strcmp(valid_mode,failed_mode) != 0){
-            set_changes_mode_int(&changes,3,valid_mode);
-        }
-
     }else{
-        valid_mode = set_changes_mode_int(&changes,3,mode);
+        
+        if(is_valid_mode(mode) == -1){
+            printf("Illegal mode! ");
+            return -1;
+        }
+        valid_mode = strtoll(mode,NULL,8);
+	    printf("%o \n", valid_mode);
+        //check if its a valid mode
+        
     }
 
-    if(strcmp(valid_mode,failed_mode) == 0){
-        printf("Invalid mode! \n");
+    if(valid_mode == -1){
+        printf("Illegal mode\n");
         return -1;
     }
-    
-    	
-    int final_change = changes[0] | changes[1] | changes[2];
 
-    if(chmod(filename, final_change) != 0){
-        perror("Chmod failed: ");
-    }
-    status = stat(filename,&buffer);
+
+	if (chmod(filename, valid_mode) != 0)
+	{
+		perror("Chmod failed: ");
+	}
+	status = stat(filename,&buffer);
     if (status != 0){
         perror("Stat failed: \n");
     }
@@ -229,8 +212,5 @@ int main(int argc, char *argv[] ){
     if ((pwd = getpwuid(buffer.st_uid)) != NULL)
         printf(" %-8.8s\n", pwd->pw_name);
     else
-        printf(" %-8d\n", buffer.st_uid);
-    
-    free(changes);
-       
+        printf(" %-8d\n", buffer.st_uid);   
 }
