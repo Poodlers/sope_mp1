@@ -1,0 +1,2 @@
+122 ; 3802 ; PROC_CREAT ; ./xmod -v 400 bruh.txt 
+823 ; 3802 ; PROC_EXIT ; -1

@@ -6,6 +6,9 @@
 #include <grp.h>
 #include <pwd.h>
 #include <sys/stat.h>
+#include "logs.h"
+#include <fcntl.h>
+#include <stdbool.h>
 
 
 struct Perms{
@@ -32,17 +35,30 @@ int getCurrentPerms(char* file){
     for(int i = 0; i < 9; i++){
 		perms = perms | modeval[i];
     }
-    printf(" Perms already in file: %o\n", perms);
+   
     return perms;
 }
+
+void getPermsStringFormat(int perm, char str[9]){
+    str[0] = (perm & S_IRUSR) ? 'r' : '-';
+    str[1] = (perm & S_IWUSR) ? 'w' : '-';
+    str[2] = (perm & S_IXUSR) ? 'x' : '-';
+    str[3] = (perm & S_IRGRP) ? 'r' : '-';
+    str[4] = (perm & S_IWGRP) ? 'w' : '-';
+    str[5] = (perm & S_IXGRP) ? 'x' : '-';
+    str[6] = (perm & S_IROTH) ? 'r' : '-';
+    str[7] = (perm & S_IWOTH) ? 'w' : '-';
+    str[8] = (perm & S_IXOTH) ? 'x' : '-';  
+}
+
 
 
 /// Creates an array with the valid combination of rwx operations
 void build_Perms(struct Perms** perms_arr,int length){
     *perms_arr = malloc(length * sizeof(struct Perms));
     if(*perms_arr == NULL) return;
+
     struct Perms mode1;
-    
     mode1.perm[0] = 'r';
     mode1.perm[1] = '\0';
     mode1.octal_mode = 04;
@@ -90,7 +106,7 @@ void build_Perms(struct Perms** perms_arr,int length){
     (*perms_arr)[6] = mode7;
 }
 
-int set_changes_mode_str(char* str, char* file){
+int set_changes_mode_str(char* str, char* file, int oldPerms){
     struct Perms* perms_arr;
     int length = 7;
     build_Perms(&perms_arr,length);
@@ -116,26 +132,21 @@ int set_changes_mode_str(char* str, char* file){
             perms = perms_arr[i].octal_mode;
         }
     }
-    printf("%d\n",perms);
     if(str[0] == 'u') perms = perms << 6;
     else if(str[0] == 'g') perms = perms << 3;
     else if(str[0] == 'a') perms = perms <<6 | perms <<3 | perms;
-    printf("Perms after user insert gotdamn: %o\n",perms);
     if(perms == -1){
         return -1;
     }
     if(str[1] == '+'){
         //add the new permissions to already existant ones
         //lets read the current perms
-        printf("%o perms + bef\n", perms);
-        perms |= getCurrentPerms(file);
-        printf("%o perms + aft\n", perms);
+		perms |= oldPerms;
 	}else if(str[1] == '-'){
-        perms ^= getCurrentPerms(file);
-        printf("%o perms -\n", perms);
+		perms ^= oldPerms;
     }
 
-    free(perms_arr);
+	free(perms_arr);
     return perms;
 }
 
@@ -161,56 +172,125 @@ int is_valid_mode(char* mode){
     return 0;
 }
 
+void print_changes_command(int oldPerms,int newPerms,char filename[200]){
+    char oldPermsString[9];
+	char newPermsString[9];
+	getPermsStringFormat(oldPerms, oldPermsString);
+    getPermsStringFormat(newPerms, newPermsString);
+	printf("mode of '%s' changed from %o (%s) to %o (%s)\n", filename, oldPerms, oldPermsString,newPerms,newPermsString);
+}
 
+void print_verbose_retain_command(int oldPerms,char filename[200]){
+    char oldPermsString[9];
+	getPermsStringFormat(oldPerms, oldPermsString);
+	printf("mode of '%s' retained as %o (%s)\n", filename, oldPerms,oldPermsString);
+}
 
 int main(int argc, char *argv[] ){
-    
-    char filename[120];
+    clock_t begin = clock(); //time at beggining of execution
+    if(check_if_env_var_set() == 0){
+        create_log_file();
+        send_proc_create(begin,argv,argc);
+    }
+    //send first creation of parent prcoess 
+    char filename[200];
     char mode[120];
-    strcpy(mode,argv[1]);
-    strcpy(filename,argv[2]);
+    strcpy(mode,argv[argc - 2]);
+    strcpy(filename,argv[argc - 1]);
     struct stat buffer;
     struct passwd *pwd;
     int status;
-    printf("%s\n", filename);
+    bool verbose = false, changes = false, recursive = false;
+    int newPerms;
 
-    int valid_mode;
+    //check if file exists
+    if( access( filename, F_OK ) != 0 ) {
+        printf("xmod: cannot access '%s': No such file or directory\n",filename);
+        printf("failed to change mode of '%s' from 0000 (---------) to 0000 (---------)\n",filename);
+        send_proc_exit(begin,-1);
+        return -1;
+    } 
 
-    printf("%s\n", mode);
-
-    if(atoi(argv[1]) == 0){  //if atoi fails, then its a mode specified with letters
-        printf("text mode\n");
-        valid_mode = set_changes_mode_str(mode,filename);
-    }else{
-        
-        if(is_valid_mode(mode) == -1){
-            printf("Illegal mode! ");
+    //check for flags "-v", "-r", "-c"
+    // -c - displays only if there were changes in file perms
+    // -v - always displays even if nothing changes
+    // -R - recursive
+    for(int i = 1; i < argc - 2;i++){ //iterate until argc - 2 which specifies mode/octal-mode
+        if(strcmp("-v",argv[i]) == 0){
+            verbose = true;
+        }
+        else if(strcmp("-r",argv[i]) == 0){
+            recursive = true;
+        }
+        else if(strcmp("-c",argv[i]) == 0){
+            changes = true;
+        }
+        else{
+            send_proc_exit(begin,-1);
             return -1;
         }
-        valid_mode = strtoll(mode,NULL,8);
-	    printf("%o \n", valid_mode);
+    }
+    
+    //check if file exists
+    if( access( filename, F_OK ) != 0 ) {
+        printf("File does not exist\n");
+        send_proc_exit(begin,-1);
+        return -1;
+    } 
+
+
+    int oldPerms = getCurrentPerms(filename);
+	
+    
+	if(atoi(argv[argc - 2]) == 0){  //if atoi fails, then its a mode specified with letters
+        newPerms = set_changes_mode_str(mode,filename,oldPerms);
+    }
+    else{
+
+		if(is_valid_mode(mode) == -1){
+            printf("Illegal mode! ");
+            send_proc_exit(begin,-1);
+            return -1;
+        }
+        newPerms = strtoll(mode,NULL,8);
         //check if its a valid mode
         
     }
-
-    if(valid_mode == -1){
+    
+    if(newPerms == -1){
         printf("Illegal mode\n");
+        send_proc_exit(begin,-1);
         return -1;
     }
-
-
-	if (chmod(filename, valid_mode) != 0)
+    
+	if (chmod(filename, newPerms) != 0)
 	{
 		perror("Chmod failed: ");
+        send_proc_exit(begin,-1);
+        return -1;
 	}
 	status = stat(filename,&buffer);
     if (status != 0){
         perror("Stat failed: \n");
+        send_proc_exit(begin,-1);
+        return -1;
     }
+
+    if(check_if_env_var_set() == 0) send_file_mode_change(begin,oldPerms,newPerms,filename);
+
+    if((changes || verbose) && oldPerms != newPerms){
+        print_changes_command(oldPerms,newPerms,filename);
+	}
+    if(verbose && oldPerms == newPerms){
+        print_verbose_retain_command(oldPerms,filename);
+    } 
     
-    /* Print out owner's name if it is found using getpwuid(). */
+    /* Print out owner's name if it is found using getpwuid(). 
     if ((pwd = getpwuid(buffer.st_uid)) != NULL)
         printf(" %-8.8s\n", pwd->pw_name);
     else
         printf(" %-8d\n", buffer.st_uid);   
+    */
+    send_proc_exit(begin,0);
+    return 0;
 }
