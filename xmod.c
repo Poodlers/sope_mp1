@@ -214,7 +214,7 @@ int main(int argc, char *argv[] ){
     //check for flags "-v", "-r", "-c"
     // -c - displays only if there were changes in file perms
     // -v - always displays even if nothing changes
-    // -R - recursive
+    // -r - recursive
     for(int i = 1; i < argc - 2;i++){ //iterate until argc - 2 which specifies mode/octal-mode
         if(strcmp("-v",argv[i]) == 0){
             verbose = true;
@@ -276,7 +276,7 @@ int main(int argc, char *argv[] ){
         return -1;
     }
 
-    if(check_if_env_var_set() == 0) send_file_mode_change(begin,oldPerms,newPerms,filename);
+    if(check_if_env_var_set() == 0 && oldPerms != newPerms) send_file_mode_change(begin,oldPerms,newPerms,filename);
 
     if((changes || verbose) && oldPerms != newPerms){
         print_changes_command(oldPerms,newPerms,filename);
@@ -285,12 +285,7 @@ int main(int argc, char *argv[] ){
         print_verbose_retain_command(oldPerms,filename);
     } 
     
-    /* Print out owner's name if it is found using getpwuid(). 
-    if ((pwd = getpwuid(buffer.st_uid)) != NULL)
-        printf(" %-8.8s\n", pwd->pw_name);
-    else
-        printf(" %-8d\n", buffer.st_uid);   
-    */
+    
     send_proc_exit(begin,0);
     return 0;
 }
