@@ -51,6 +51,74 @@ void getPermsStringFormat(int perm, char str[9]){
     str[8] = (perm & S_IXOTH) ? 'x' : '-';  
 }
 
+int search_dir(char* dir,int newPerms){
+    struct dirent *de;  // Pointer for directory entry     
+    // opendir() returns a pointer of DIR type.  
+    DIR *dr = opendir(dir); 
+    printf("running search_dir in dir: %s \n", dir);
+    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
+    { 
+        printf("Could not open current directory" ); 
+        return -1; 
+    } 
+  
+    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
+    // for readdir() 
+    long int res;
+
+    while ((de = readdir(dr)) != NULL){
+        if(de->d_type == DT_DIR){ //if path is directory
+
+            if(de->d_name[0] != '.'){
+                //se não é nem o current_dir nem o pai do curr_dir
+                //criar novo processo para dar parse às files deste dir
+                printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
+                pid_t id = fork();
+                int status;
+                switch (id) {
+                    case -1:
+                        perror ("fork"); 
+                        exit (1);
+                    case 0: //child process
+                        // chamar search_dir() com novo 
+                        {
+                            printf("\n");
+                            printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
+                            char* curr_dir = malloc(260 * sizeof(char));
+                            strcat(curr_dir,dir);
+                            strcat(curr_dir,"/");
+                            strcat(curr_dir,de->d_name);
+                            search_dir(curr_dir,newPerms);
+                            free(curr_dir);
+                            return 0;
+                        }
+						
+                        break;
+                    default: //parent process
+                        printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
+                        waitpid(id,&status,0);
+                        printf("CHILD PROCESS DIED\n");
+						break;
+				}
+            }    
+        }
+        else if(de->d_type == DT_REG){
+            char * filename = malloc(260 * sizeof(char));
+            strcat(filename,dir);
+            strcat(filename,"/");
+            strcat(filename,de->d_name);
+            if (chmod(filename, newPerms) != 0){
+                perror("Chmod failed: ");
+                return -1;
+	        }   
+            free(filename); 
+            
+        }
+	}
+	
+    return 0; 
+}
+
 
 
 /// Creates an array with the valid combination of rwx operations
@@ -263,19 +331,20 @@ int main(int argc, char *argv[] ){
         return -1;
     }
     
-	if (chmod(filename, newPerms) != 0)
-	{
-		perror("Chmod failed: ");
-        send_proc_exit(begin,-1);
-        return -1;
-	}
-	status = stat(filename,&buffer);
-    if (status != 0){
-        perror("Stat failed: \n");
-        send_proc_exit(begin,-1);
-        return -1;
-    }
+    if(recursive){
+        if(search_dir(filename,newPerms) != 0){
+            send_proc_exit(begin,-1);
+            return -1;
+        }
+    }else{
 
+        if (chmod(filename, newPerms) != 0){
+            perror("Chmod failed: ");
+            send_proc_exit(begin,-1);
+            return -1;
+	    }
+    }
+	
     if(check_if_env_var_set() == 0 && oldPerms != newPerms) send_file_mode_change(begin,oldPerms,newPerms,filename);
 
     if((changes || verbose) && oldPerms != newPerms){
