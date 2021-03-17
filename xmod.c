@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <stdbool.h>
 
-long procTimeSinceBoot;
+long timeSinceEpochParentStart;
 bool write_logs;
 
 struct Perms{
@@ -85,13 +85,16 @@ void getPermsStringFormat(int perm, char str[9]){
     str[8] = (perm & S_IXOTH) ? 'x' : '-';  
 }
 
-
 void print_changes_command(int oldPerms,int newPerms,char filename[200]){
     char oldPermsString[9];
 	char newPermsString[9];
 	getPermsStringFormat(oldPerms, oldPermsString);
+
+    printf("mode of '%s' changed from %o (%s)", filename, oldPerms, oldPermsString);
+
     getPermsStringFormat(newPerms, newPermsString);
-	printf("mode of '%s' changed from %o (%s) to %o (%s)\n", filename, oldPerms, oldPermsString,newPerms,newPermsString);
+
+	printf(" to %o (%s)\n", newPerms,newPermsString);
 }
 
 void print_verbose_retain_command(int oldPerms,char filename[200]){
@@ -192,30 +195,34 @@ int getCurrentPerms(char* file){
 int process_file(char* filename, char* mode, bool verbose, bool changes){
     int oldPerms = getCurrentPerms(filename);
     int newPerms;
+    printf("mode %s \n",mode);
     if(atoi(mode) == 0){  //if atoi fails, then its a mode specified with letters
         newPerms = set_changes_mode_str(mode,filename,oldPerms);
+        if(newPerms == -1){
+            return -1;
+        }
     }
     else{
         if(is_valid_mode(mode) == -1){
             printf("Illegal mode! ");
-            if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+            if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
     }
     newPerms = strtoll(mode,NULL,8);
     //check if its a valid mode
     if(newPerms == -1){
         printf("Illegal mode\n");
-        if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+        if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
         }
     }
     if (chmod(filename, newPerms) != 0){
         perror("Chmod failed: ");
-        if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+        if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
     }
 
-    if(write_logs && oldPerms != newPerms) send_file_mode_change(procTimeSinceBoot,oldPerms,newPerms,filename);
+    if(write_logs && oldPerms != newPerms) send_file_mode_change(timeSinceEpochParentStart,oldPerms,newPerms,filename);
 
     if((changes || verbose) && oldPerms != newPerms){
         print_changes_command(oldPerms,newPerms,filename);
@@ -226,25 +233,50 @@ int process_file(char* filename, char* mode, bool verbose, bool changes){
 }
 
 
+char* filename;
+int total_files_found = 0;
+int total_files_processed = 0;
 
-void sigint_handler(int signo) {
-	if(write_logs) send_signal_recv(procTimeSinceBoot,signo);
+
+void signal_handler(int signo) {
+	if(write_logs) send_signal_recv(timeSinceEpochParentStart,signo);
+    display_info_signal(filename,total_files_found);
+    pause();
+}
+
+int send_signal(int pid, int signal){
+    int ret;
+    ret = kill(pid,signal);
 }
 
 void define_sigint_handler(){
     struct sigaction new, old;
 	sigset_t smask;	// defines signals to block while func() is running
-
+    char str[50];
 	// prepare struct sigaction
 	if (sigemptyset(&smask)==-1)	// block no signal
 		perror("sigsetfunctions");
-	new.sa_handler = sigint_handler;
+	new.sa_handler = signal_handler;
 	new.sa_mask = smask;
 	new.sa_flags = 0;	// usually works
 
 	if(sigaction(SIGINT, &new, &old) == -1)
 		perror("sigaction");
-    if(sigaction(SIGINT, &new, &old) == -1)
+    if(sigaction(SIGHUP, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGQUIT, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGBUS, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGSEGV, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGPIPE, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGALRM, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGTERM, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(17, &new, &old) == -1)
 		perror("sigaction");
 }
 
@@ -280,28 +312,30 @@ int search_dir(char* dir,char* mode,bool verbose,bool changes){
     return 0; 
 }
 
+
 int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
     struct dirent *de;  // Pointer for directory entry     
     // opendir() returns a pointer of DIR type.  
     char* dir = args[arg_num -1];
     DIR *dr = opendir(dir); 
-    printf("running search_dir in dir: %s \n", dir);
+    //printf("running search_dir in dir: %s \n", dir);
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
     { 
         printf("Could not open current directory" ); 
         return -1; 
     } 
-  
+    
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
     // for readdir() 
     long int res;
+
 
     while ((de = readdir(dr)) != NULL){
         if(de->d_type == DT_DIR){ //if path is directory
             if(de->d_name[0] != '.'){
                 //se não é nem o current_dir nem o pai do curr_dir
                 //criar novo processo para dar parse às files deste dir
-                printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
+                //printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
                 pid_t id = fork();
                 int status;
                 switch (id) {
@@ -315,15 +349,15 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                             strcat(curr_dir,dir);
                             strcat(curr_dir,"/");
                             strcat(curr_dir,de->d_name);
-                            char* args_to_exec[arg_num];
-                            for(int i = 1; i < arg_num;i++){
-                                args_to_exec[i - 1] = args[i];
+                            char* args_to_exec[arg_num+1];
+                            for(int i = 0; i < arg_num;i++){
+                                args_to_exec[i] = args[i];
                             }
-                            args_to_exec[arg_num - 2] = curr_dir;
-                            args_to_exec[arg_num - 1] = NULL;
+                            args_to_exec[arg_num - 1] = curr_dir;
+                            args_to_exec[arg_num] = NULL;
                             
-                            printf("\n");
-                            printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
+                            //printf("\n");
+                            //printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
                             
                             execvp(args[0],args_to_exec);
                             free(curr_dir);
@@ -333,8 +367,8 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
 						
                         break;
                     default: //parent process
-                        if(write_logs) send_proc_create(procTimeSinceBoot,args,arg_num);
-                        printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
+                        if(write_logs) send_proc_create(timeSinceEpochParentStart,args,arg_num);
+                        //printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
 						break;
 				}
             }    
@@ -357,6 +391,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
 
 
 
+
 //returns 1 if the file is a directory and 2 if it is a regular file
 int is_regular_file(const char *path)
 {
@@ -373,7 +408,12 @@ int is_regular_file(const char *path)
 }
 
 
+//this approach was attempted but in the end uptime only has 2 decimal places for milliseconds
+//meaning that all values would be in 10 ms intervals so it was deemed not precise enough
+// instead we will simply store milliseconds since epoch in env var
+//and then when we need to time stuff we simply see the difference between milliseconds now and in the env_var;
 
+/*
 long getProcTimeSinceBoot(){
     char begin_str[10];
     sprintf(begin_str, "%d", getpid());
@@ -396,6 +436,7 @@ long getProcTimeSinceBoot(){
     procTimeSinceBoot = (long)((double)procTimeSinceBoot / sysconf(_SC_CLK_TCK) * 1000 );
     return procTimeSinceBoot;
 }
+*/
 
 
 int main(int argc, char *argv[]){
@@ -407,22 +448,30 @@ int main(int argc, char *argv[]){
 
 	if(getenv("PARENT_TIME") == NULL){
         //saving the inicial processes procTimeSinceLinuxBoot
-        procTimeSinceBoot = getProcTimeSinceBoot();
+        timeSinceEpochParentStart = getMillisecondsSinceEpoch();
         char begin_str[20];
-        sprintf(begin_str, "%ld", procTimeSinceBoot);
-        char env_var_set_str[256] = "";
-        strcat(env_var_set_str,"PARENT_TIME=");
-        strcat(env_var_set_str,begin_str);
-		putenv(env_var_set_str);
+        sprintf(begin_str, "%ld", timeSinceEpochParentStart);
+        //char env_var_set_str[256] = "";
+        //strcat(env_var_set_str,"export PARENT_TIME=");
+        //strcat(env_var_set_str,begin_str);
+        //system(env_var_set_str);
+        //printf("PARENT_TIME: %s \n", getenv("PARENT_TIME")); //este falha
+		setenv("PARENT_TIME", begin_str, 0);
 
-        if (write_logs){
+		if (write_logs){
+            printf("Created my log file!\n");
             create_log_file();
         }
+
+    printf("PARENT_TIME= %s \n",getenv("PARENT_TIME"));
+
 	}else{
-        procTimeSinceBoot = atol(getenv("PARENT_TIME"));
-    } 
+        timeSinceEpochParentStart = atol(getenv("PARENT_TIME"));
+    }
+
     if (write_logs){
-        send_proc_create(procTimeSinceBoot,argv,argc);
+        send_proc_create(timeSinceEpochParentStart,argv,argc);
+        
     }
     
 	define_sigint_handler();
@@ -460,7 +509,7 @@ int main(int argc, char *argv[]){
         else{
             while ((wpid = wait(&status)) > 0);
 
-            if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+            if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
         }
     }
@@ -471,14 +520,14 @@ int main(int argc, char *argv[]){
         printf("failed to change mode of '%s' from 0000 (---------) to 0000 (---------)\n",filename);
         while ((wpid = wait(&status)) > 0);
 
-        if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+        if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
     }
     else if(is_regular_file(filename) == 1){ //it is a directory
        if(recursive){
 			if(search_dir_recursive(argv,argc,verbose,changes) != 0){
                 while ((wpid = wait(&status)) > 0);  
-                if(write_logs) send_proc_exit(procTimeSinceBoot,-1);
+                if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
                 return -1;
             }
         }
@@ -493,7 +542,6 @@ int main(int argc, char *argv[]){
     
     //tell parent to wait for children
     while ((wpid = wait(&status)) > 0);
-    
-	if(write_logs) send_proc_exit(procTimeSinceBoot,0);
+	if(write_logs) send_proc_exit(timeSinceEpochParentStart,0);
     return 0;
 }

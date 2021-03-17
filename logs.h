@@ -10,9 +10,13 @@ int send_proc_create(long procTimeBegin,char* args[],int num_args);
 
 int close_log_file();
 
+void display_info_signal(char* filename, int total_files_found, int total_files_processed);
+
 int send_proc_exit(long procTimeBegin,int exit_status);
 
 long get_time_until_now(long procTimeSinceBoot);
+
+long getMillisecondsSinceEpoch();
 
 int send_signal_recv(long procTimeBegin,int signal);
 
