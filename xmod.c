@@ -90,8 +90,12 @@ void print_changes_command(int oldPerms,int newPerms,char filename[200]){
     char oldPermsString[9];
 	char newPermsString[9];
 	getPermsStringFormat(oldPerms, oldPermsString);
+
+    printf("mode of '%s' changed from %o (%s)", filename, oldPerms, oldPermsString);
+
     getPermsStringFormat(newPerms, newPermsString);
-	printf("mode of '%s' changed from %o (%s) to %o (%s)\n", filename, oldPerms, oldPermsString,newPerms,newPermsString);
+
+	printf(" to %o (%s)\n", newPerms,newPermsString);
 }
 
 void print_verbose_retain_command(int oldPerms,char filename[200]){
@@ -285,7 +289,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
     // opendir() returns a pointer of DIR type.  
     char* dir = args[arg_num -1];
     DIR *dr = opendir(dir); 
-    printf("running search_dir in dir: %s \n", dir);
+    //printf("running search_dir in dir: %s \n", dir);
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
     { 
         printf("Could not open current directory" ); 
@@ -301,7 +305,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
             if(de->d_name[0] != '.'){
                 //se não é nem o current_dir nem o pai do curr_dir
                 //criar novo processo para dar parse às files deste dir
-                printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
+                //printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
                 pid_t id = fork();
                 int status;
                 switch (id) {
@@ -315,15 +319,15 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                             strcat(curr_dir,dir);
                             strcat(curr_dir,"/");
                             strcat(curr_dir,de->d_name);
-                            char* args_to_exec[arg_num];
-                            for(int i = 1; i < arg_num;i++){
-                                args_to_exec[i - 1] = args[i];
+                            char* args_to_exec[arg_num+1];
+                            for(int i = 0; i < arg_num;i++){
+                                args_to_exec[i] = args[i];
                             }
-                            args_to_exec[arg_num - 2] = curr_dir;
-                            args_to_exec[arg_num - 1] = NULL;
+                            args_to_exec[arg_num - 1] = curr_dir;
+                            args_to_exec[arg_num] = NULL;
                             
-                            printf("\n");
-                            printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
+                            //printf("\n");
+                            //printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
                             
                             execvp(args[0],args_to_exec);
                             free(curr_dir);
@@ -334,7 +338,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                         break;
                     default: //parent process
                         if(write_logs) send_proc_create(procTimeSinceBoot,args,arg_num);
-                        printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
+                        //printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
 						break;
 				}
             }    
@@ -371,8 +375,6 @@ int is_regular_file(const char *path)
         return 2;
     }
 }
-
-
 
 long getProcTimeSinceBoot(){
     char begin_str[10];
