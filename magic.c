@@ -40,9 +40,8 @@ long get_long_from_str(char* str,int desired_ind){
 }
 
 
-int get_until_now(int parent){
+int get_until_now(long procTimeSinceBoot){
     //read the env_var to check what the parents PID is
-    
     FILE* fd;
     char buff[128];
     time_t boottime;
@@ -68,27 +67,6 @@ int get_until_now(int parent){
     long long uptime_long = (long long)(uptime);
     boot_time_msecs = msecs_time_now - uptime_long;
 
-    printf("Milliseconds since January 1st that linux started running: %lld \n", boot_time_msecs);
-
-	char begin_str[10];
-    sprintf(begin_str, "%d", parent);
-    char proc_file_path[256] = "";
-    strcat(proc_file_path,"/proc/");
-    strcat(proc_file_path,begin_str);
-    strcat(proc_file_path,"/stat");  
-    printf("Oi %s\n", proc_file_path);
-
-	FILE *fp = fopen(proc_file_path, "r");
-    long procTimeSinceBoot;
-
-    while ((read = getline(&line, &len, fp)) != -1)
-	{
-	
-        procTimeSinceBoot = get_long_from_str(line,21);
-	}
-    printf("%ld \n", procTimeSinceBoot);
-    procTimeSinceBoot = (long)((double)procTimeSinceBoot / sysconf(_SC_CLK_TCK) * 1000 );
-    
     //milliseconds since linux started running
     
 
@@ -104,23 +82,50 @@ int get_until_now(int parent){
 	if(line)
         free(line);
 
-    fclose(fp);
 	
 	return 0;
+}
 
+long getProcTimeSinceBoot(){
+    char begin_str[10];
+    sprintf(begin_str, "%d", getpid());
+    char proc_file_path[256] = "";
+    strcat(proc_file_path,"/proc/");
+    strcat(proc_file_path,begin_str);
+    strcat(proc_file_path,"/stat");  
+    printf("Oi %s\n", proc_file_path);
+    FILE *fp = fopen(proc_file_path, "r");
+
+    char* line = NULL;
+    size_t len = 32;
+    size_t read;
+    line = (char *) malloc(len * sizeof(char));
+
+    long procTimeSinceBoot;
+    printf("opened proc file \n");
+    while ((read = getline(&line, &len, fp)) != -1)
+	{
+        printf("line read %s \n", line);
+        procTimeSinceBoot = get_long_from_str(line,21);
+	}
+    procTimeSinceBoot = (long)((double)procTimeSinceBoot / sysconf(_SC_CLK_TCK) * 1000 );
+    return procTimeSinceBoot;
 }
 
 int main( int argc, char *argv[] ) 
 {
+    long procTimeSinceBoot = getProcTimeSinceBoot(); //this will be only called once in the parent process at the beggining
     sleep(2);
-    get_until_now(getpid());
+    printf("Proc Time sINCE BOOT %ld \n",procTimeSinceBoot);
+    get_until_now(procTimeSinceBoot);
     printf("Called by %d \n",getpid());
     int id = fork();
     switch(id){
         case 0: //child
-            sleep(2);
+            sleep(1);
             printf("Called by %d \n",getpid() - 1);
-            get_until_now(getpid() - 1);
+            printf("Proc Time sINCE BOOT %ld \n",procTimeSinceBoot);
+            get_until_now(procTimeSinceBoot);
             break;
         default:
             printf("In the parent %d \n", getpid());
