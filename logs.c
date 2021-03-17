@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/time.h>
 
 extern const char * const sys_siglist[];
 
@@ -58,11 +59,46 @@ int get_sig_name(int signal, char output[40]){
 }
 
 
-int get_time_until_now(clock_t begin){
-    clock_t end = clock();
-    double time_spent = (double)(end - begin);
-    int time_elapsed = (int) (time_spent + 0.5);
-    return time_elapsed;
+int get_time_until_now(){
+    //read the env_var to check what the parents PID is
+    FILE* fd;
+    char buff[128];
+    time_t boottime;
+    char *p;
+    struct timeval tv;
+    unsigned long uptime;
+    
+
+	fd = fopen ("/proc/uptime", "r");
+    if (fd != NULL)
+    {
+       while ((read = getline(&line, &len, fp)) != -1) {
+        printf("Retrieved line of length %zu:\n", read);
+        printf("%s", line);
+    }
+      
+
+      fclose (fp);
+    }
+
+    char begin_str[10];
+    sprintf(begin_str, "%d", getenv("PARENT_PID"));
+    char proc_file_path[256] = "";
+    strcat(proc_file_path,"proc/");
+    strcat(proc_file_path,begin_str);
+    strcat(proc_file_path,"/stat");  
+
+    char proc_file_buff[500];
+
+    FILE *fp = fopen(proc_file_path, "r");
+    while ((read = getline(&line, &len, fp)) != -1) {
+        printf("Retrieved line of length %zu:\n", read);
+        printf("%s", line);
+    }
+
+    if (line)
+        free(line);
+    fclose(fp);
 }
 
 int send_proc_create(clock_t begin, char* args[],int num_args){

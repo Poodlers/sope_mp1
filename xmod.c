@@ -3,11 +3,13 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <grp.h>
-#include <pwd.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include "logs.h"
 #include <fcntl.h>
+#include <signal.h>
+#include <dirent.h>
+#include <sys/types.h>
 #include <stdbool.h>
 
 
@@ -51,9 +53,32 @@ void getPermsStringFormat(int perm, char str[9]){
     str[8] = (perm & S_IXOTH) ? 'x' : '-';  
 }
 
-int search_dir(char* dir,int newPerms){
-    struct dirent *de;  // Pointer for directory entry     
+
+void sigint_handler(int signo) {
+	if(write_logs) send_signal_recv(begin,signo);
+}
+
+void define_sigint_handler(){
+    struct sigaction new, old;
+	sigset_t smask;	// defines signals to block while func() is running
+
+	// prepare struct sigaction
+	if (sigemptyset(&smask)==-1)	// block no signal
+		perror("sigsetfunctions");
+	new.sa_handler = sigint_handler;
+	new.sa_mask = smask;
+	new.sa_flags = 0;	// usually works
+
+	if(sigaction(SIGINT, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGINT, &new, &old) == -1)
+		perror("sigaction");
+}
+
+int search_dir(char* dir,char* mode,bool verbose,bool changes,bool write_logs){
+     struct dirent *de;  // Pointer for directory entry     
     // opendir() returns a pointer of DIR type.  
+    char* dir = args[arg_num -1];
     DIR *dr = opendir(dir); 
     printf("running search_dir in dir: %s \n", dir);
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
@@ -68,7 +93,39 @@ int search_dir(char* dir,int newPerms){
 
     while ((de = readdir(dr)) != NULL){
         if(de->d_type == DT_DIR){ //if path is directory
+              continue;
+        }
+        else if(de->d_type == DT_REG){
+            char * filename = malloc(260 * sizeof(char));
+            strcat(filename,dir);
+            strcat(filename,"/");
+            strcat(filename,de->d_name);
+            process_file(filename,mode, verbose,changes,write_logs);
+              
+            free(filename);  
+        }   
+    }
+    return 0; 
+}
 
+int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes,bool write_logs){
+    struct dirent *de;  // Pointer for directory entry     
+    // opendir() returns a pointer of DIR type.  
+    char* dir = args[arg_num -1];
+    DIR *dr = opendir(dir); 
+    printf("running search_dir in dir: %s \n", dir);
+    if (dr == NULL)  // opendir returns NULL if couldn't open directory 
+    { 
+        printf("Could not open current directory" ); 
+        return -1; 
+    } 
+  
+    // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
+    // for readdir() 
+    long int res;
+
+    while ((de = readdir(dr)) != NULL){
+        if(de->d_type == DT_DIR){ //if path is directory
             if(de->d_name[0] != '.'){
                 //se não é nem o current_dir nem o pai do curr_dir
                 //criar novo processo para dar parse às files deste dir
@@ -82,22 +139,31 @@ int search_dir(char* dir,int newPerms){
                     case 0: //child process
                         // chamar search_dir() com novo 
                         {
-                            printf("\n");
-                            printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
                             char* curr_dir = malloc(260 * sizeof(char));
                             strcat(curr_dir,dir);
                             strcat(curr_dir,"/");
                             strcat(curr_dir,de->d_name);
-                            search_dir(curr_dir,newPerms);
+                            char* args_to_exec[arg_num];
+                            for(int i = 1; i < arg_num;i++){
+                                args_to_exec[i - 1] = args[i];
+                            }
+                            args_to_exec[arg_num - 2] = curr_dir;
+                            args_to_exec[arg_num - 1] = NULL;
+                            if(write_logs) send_proc_create(begin,args_to_exec,3);
+                            define_sigint_handler();
+                            printf("\n");
+                            printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
+                            
+                            execvp(argv[0],args_to_exec);
                             free(curr_dir);
+                            if(write_logs) send_proc_exit(begin,0);
                             return 0;
                         }
 						
                         break;
                     default: //parent process
+                        if(write_logs) send_proc_create(begin,args,arg_num)
                         printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
-                        waitpid(id,&status,0);
-                        printf("CHILD PROCESS DIED\n");
 						break;
 				}
             }    
@@ -107,17 +173,15 @@ int search_dir(char* dir,int newPerms){
             strcat(filename,dir);
             strcat(filename,"/");
             strcat(filename,de->d_name);
-            if (chmod(filename, newPerms) != 0){
-                perror("Chmod failed: ");
-                return -1;
-	        }   
-            free(filename); 
             
-        }
-	}
-	
+            process_file(filename,args[arg_num - 2], verbose,changes,write_logs);
+              
+           free(filename);  
+        }   
+    }
     return 0; 
 }
+
 
 
 
@@ -254,36 +318,113 @@ void print_verbose_retain_command(int oldPerms,char filename[200]){
 	printf("mode of '%s' retained as %o (%s)\n", filename, oldPerms,oldPermsString);
 }
 
-int main(int argc, char *argv[] ){
-    clock_t begin = clock(); //time at beggining of execution
+//returns 1 if the file is a directory and 2 if it is a regular file
+int is_regular_file(const char *path)
+{
+    struct stat path_stat;
+    if(stat(path, &path_stat) == -1){
+        return -1;
+    };
+    if(path_stat.st_mode == S_IFDIR){
+        return 1;
+    };
+    if(path_stat.st_mode == S_IFREG){
+        return 2;
+    }
+}
+
+void process_file(char* filename, char* mode, bool verbose, bool changes,bool write_logs){
+    int oldPerms = getCurrentPerms(filename);
+    int newPerms;
+    if(atoi(mode) == 0){  //if atoi fails, then its a mode specified with letters
+        newPerms = set_changes_mode_str(mode,filename,oldPerms);
+    }
+    else{
+        if(is_valid_mode(mode) == -1){
+            printf("Illegal mode! ");
+            if(write_logs) send_proc_exit(begin,-1);
+            return -1;
+    }
+    newPerms = strtoll(mode,NULL,8);
+    //check if its a valid mode
+    if(newPerms == -1){
+        printf("Illegal mode\n");
+        if(write_logs) send_proc_exit(begin,-1);
+        return -1;
+        }
+    }
+    if (chmod(filename, newPerms) != 0){
+        perror("Chmod failed: ");
+        if(write_logs) send_proc_exit(begin,-1);
+        return -1;
+    }
+
+    if(write_logs && oldPerms != newPerms) send_file_mode_change(begin,oldPerms,newPerms,filename);
+
+    if((changes || verbose) && oldPerms != newPerms){
+        print_changes_command(oldPerms,newPerms,filename);
+	}
+    if(verbose && oldPerms == newPerms){
+        print_verbose_retain_command(oldPerms,filename);
+    }
+}
+
+void handle_env(){
+    
+}
+
+int main(int argc, char *argv[]){
+    bool write_logs = false;
+
     if(check_if_env_var_set() == 0){
-        create_log_file();
+        write_logs = true;
+    }
+
+	if(getenv("PARENT_PID") == NULL){
+        //saving the inicial processes PID
+        char begin_str[10];
+        sprintf(begin_str, "%d", getpid());
+        char env_var_set_str[256] = "";
+        strcat(env_var_set_str,"PARENT_PID=");
+        strcat(env_var_set_str,begin_str);
+		putenv(env_var_set_str);
+
+        if (write_logs){
+            create_log_file();
+        }
+	} 
+
+
+	define_sigint_handler();
+    
+    if (write_logs){
         send_proc_create(begin,argv,argc);
     }
-    //send first creation of parent prcoess 
+   
+
+    //send first creation of parent process 
     char filename[200];
     char mode[120];
+
     strcpy(mode,argv[argc - 2]);
     strcpy(filename,argv[argc - 1]);
+
     struct stat buffer;
     struct passwd *pwd;
     int status;
     bool verbose = false, changes = false, recursive = false;
     int newPerms;
+	int searchOptions;
 
-    //check if file exists
-    if( access( filename, F_OK ) != 0 ) {
-        printf("xmod: cannot access '%s': No such file or directory\n",filename);
-        printf("failed to change mode of '%s' from 0000 (---------) to 0000 (---------)\n",filename);
-        send_proc_exit(begin,-1);
-        return -1;
-    } 
+    pid_t wpid;
+    int status = 0;
 
-    //check for flags "-v", "-r", "-c"
+
+	//check for flags "-v", "-r", "-c"    //check for flags "-v", "-r", "-c"
     // -c - displays only if there were changes in file perms
     // -v - always displays even if nothing changes
     // -r - recursive
-    for(int i = 1; i < argc - 2;i++){ //iterate until argc - 2 which specifies mode/octal-mode
+    for(int i = 1; i < argc - 2; i++){ //iterate until argc - 2 which specifies mode/octal-mode
         if(strcmp("-v",argv[i]) == 0){
             verbose = true;
         }
@@ -294,67 +435,43 @@ int main(int argc, char *argv[] ){
             changes = true;
         }
         else{
-            send_proc_exit(begin,-1);
+            while ((wpid = wait(&status)) > 0);
+
+            if(write_logs) send_proc_exit(begin,-1);
             return -1;
         }
     }
-    
+
     //check if file exists
-    if( access( filename, F_OK ) != 0 ) {
-        printf("File does not exist\n");
-        send_proc_exit(begin,-1);
-        return -1;
-    } 
+    if(is_regular_file(filename) == -1) { //whatever we typed in does not exist
+        printf("xmod: cannot access '%s': No such file or directory\n",filename);
+        printf("failed to change mode of '%s' from 0000 (---------) to 0000 (---------)\n",filename);
+        while ((wpid = wait(&status)) > 0);
 
-
-    int oldPerms = getCurrentPerms(filename);
-	
-    
-	if(atoi(argv[argc - 2]) == 0){  //if atoi fails, then its a mode specified with letters
-        newPerms = set_changes_mode_str(mode,filename,oldPerms);
-    }
-    else{
-
-		if(is_valid_mode(mode) == -1){
-            printf("Illegal mode! ");
-            send_proc_exit(begin,-1);
-            return -1;
-        }
-        newPerms = strtoll(mode,NULL,8);
-        //check if its a valid mode
-        
-    }
-    
-    if(newPerms == -1){
-        printf("Illegal mode\n");
-        send_proc_exit(begin,-1);
+        if(write_logs) send_proc_exit(begin,-1);
         return -1;
     }
-    
-    if(recursive){
-        if(search_dir(filename,newPerms) != 0){
-            send_proc_exit(begin,-1);
-            return -1;
+    else if(is_regular_file(filename) == 1){ //it is a directory
+       if(recursive){
+			if(search_dir_recursive(argv,argc,verbose,changes,write_logs) != 0){
+                while ((wpid = wait(&status)) > 0);  
+                if(write_logs) send_proc_exit(begin,-1);
+                return -1;
+            }
         }
-    }else{
-
-        if (chmod(filename, newPerms) != 0){
-            perror("Chmod failed: ");
-            send_proc_exit(begin,-1);
-            return -1;
-	    }
+        else{
+            search_dir(filename,mode,verbose,changes,write_logs);
+        }
     }
-	
-    if(check_if_env_var_set() == 0 && oldPerms != newPerms) send_file_mode_change(begin,oldPerms,newPerms,filename);
+    else if(is_regular_file(filename) == 2){ //is a file
+        process_file(filename,mode,verbose,changes,write_logs);
+    }
 
-    if((changes || verbose) && oldPerms != newPerms){
-        print_changes_command(oldPerms,newPerms,filename);
-	}
-    if(verbose && oldPerms == newPerms){
-        print_verbose_retain_command(oldPerms,filename);
-    } 
-    
-    
-    send_proc_exit(begin,0);
+
+
+    //tell parent to wait for children
+    while ((wpid = wait(&status)) > 0);
+
+	if(write_logs) send_proc_exit(begin,0);
     return 0;
 }
