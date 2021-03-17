@@ -10,7 +10,7 @@ CC = gcc
 
 #  -Wall turns on most, but not all, compiler warnings
 
-CFLAGS  = -g -l
+CFLAGS  = -g -Wall
 
 
 

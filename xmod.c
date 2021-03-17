@@ -14,6 +14,11 @@
 
 long timeSinceEpochParentStart;
 bool write_logs;
+int child_process_index = 0; 
+int files_processed;
+int files_modified;
+char filename[120];
+pid_t child_processes[500];
 
 struct Perms{
     char perm[4];
@@ -195,7 +200,7 @@ int getCurrentPerms(char* file){
 int process_file(char* filename, char* mode, bool verbose, bool changes){
     int oldPerms = getCurrentPerms(filename);
     int newPerms;
-    printf("mode %s \n",mode);
+    //printf("mode %s \n",mode);
     if(atoi(mode) == 0){  //if atoi fails, then its a mode specified with letters
         newPerms = set_changes_mode_str(mode,filename,oldPerms);
         if(newPerms == -1){
@@ -221,7 +226,8 @@ int process_file(char* filename, char* mode, bool verbose, bool changes){
         if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
     }
-
+    files_modified++;
+    
     if(write_logs && oldPerms != newPerms) send_file_mode_change(timeSinceEpochParentStart,oldPerms,newPerms,filename);
 
     if((changes || verbose) && oldPerms != newPerms){
@@ -230,37 +236,70 @@ int process_file(char* filename, char* mode, bool verbose, bool changes){
     if(verbose && oldPerms == newPerms){
         print_verbose_retain_command(oldPerms,filename);
     }
+    return 0;
 }
 
 
-char* filename;
-int total_files_found = 0;
-int total_files_processed = 0;
+void send_signal(int pid, int signal){
+    kill(pid,signal);
+}
 
-
-void signal_handler(int signo) {
+void signal_handler_default(int signo) {
 	if(write_logs) send_signal_recv(timeSinceEpochParentStart,signo);
-    display_info_signal(filename,total_files_found);
+}
+
+void signal_handler_SIGINT_child(int signo){
+    if(write_logs) send_signal_recv(timeSinceEpochParentStart,signo);
+    display_info_signal(filename,files_processed,files_modified);
     pause();
 }
 
-int send_signal(int pid, int signal){
-    int ret;
-    ret = kill(pid,signal);
+void signal_handler_SIGINT_parent(int signo){
+    char answer = 'b';
+
+    if(write_logs) send_signal_recv(timeSinceEpochParentStart,signo);
+    display_info_signal(filename,files_processed,files_modified);
+    sleep(1);
+    do{
+        printf("Do you wish to resume the program? (y/n) ?: ");
+        scanf("%c", &answer);
+        printf("you answered: %c \n",answer);
+        if(answer == 'y' || answer == 'Y'){
+            for(int i = 0; i < child_process_index;i++){
+                send_signal(child_processes[i],SIGHUP); // para continuar o processo
+            }
+            break;
+        }else if(answer == 'n' || answer == 'N'){
+
+            for(int i = 0; i < child_process_index;i++){
+                send_signal(child_processes[i], SIGALRM);  //matar as crianças
+            }
+            
+            if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
+            exit(-1);
+        }
+        //limpar buffer
+        answer = ' ';
+    }while(answer != 'y' && answer != 'Y' && answer != 'n' && answer != 'N');
+
 }
 
-void define_sigint_handler(){
-    struct sigaction new, old;
+
+void define_handlers_parent(){
+    struct sigaction new, new_sigint, old;
 	sigset_t smask;	// defines signals to block while func() is running
-    char str[50];
 	// prepare struct sigaction
 	if (sigemptyset(&smask)==-1)	// block no signal
 		perror("sigsetfunctions");
-	new.sa_handler = signal_handler;
+	new.sa_handler = signal_handler_default;
 	new.sa_mask = smask;
 	new.sa_flags = 0;	// usually works
 
-	if(sigaction(SIGINT, &new, &old) == -1)
+    new_sigint.sa_handler = signal_handler_SIGINT_parent;
+	new_sigint.sa_mask = smask;
+	new_sigint.sa_flags = 0;	// usually works
+
+	if(sigaction(SIGINT, &new_sigint, &old) == -1)
 		perror("sigaction");
     if(sigaction(SIGHUP, &new, &old) == -1)
 		perror("sigaction");
@@ -273,6 +312,69 @@ void define_sigint_handler(){
     if(sigaction(SIGPIPE, &new, &old) == -1)
 		perror("sigaction");
     if(sigaction(SIGALRM, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGTERM, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(17, &new, &old) == -1)
+		perror("sigaction");
+}
+
+void signal_handler_SIGHUP(int signo){ //continue execution
+    signal_handler_default(signo);
+    printf("Continuing execution! \n");
+    for(int i =0; i < child_process_index;i++){
+        send_signal(child_processes[i],SIGHUP);
+    }
+}
+
+void signal_handler_SIGALRM(int signo){ //kill all children of this process as well
+    signal_handler_default(signo);
+    for(int i =0; i < child_process_index;i++){
+        send_signal(child_processes[i],SIGALRM);
+    }
+    if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
+    exit(-1);
+
+}
+
+
+void define_sigint_handler_children(){
+    struct sigaction new, new_sigint, new_sighup, new_sigalrm, old;
+	sigset_t smask;	// defines signals to block while func() is running
+	// prepare struct sigaction
+	if (sigemptyset(&smask)==-1)	// block no signal
+		perror("sigsetfunctions");
+	new.sa_handler = signal_handler_default;
+	new.sa_mask = smask;
+	new.sa_flags = 0;	// usually works
+
+    new_sigint.sa_handler = signal_handler_SIGINT_child;
+	new_sigint.sa_mask = smask;
+	new_sigint.sa_flags = 0;	// usually works
+
+    //this will be the signal that kids receive to continue execution
+    new_sighup.sa_handler = signal_handler_SIGHUP;
+	new_sighup.sa_mask = smask;
+	new_sighup.sa_flags = 0;
+
+    //this is will the signal that kids receive that means they should die right there
+    new_sigalrm.sa_handler = signal_handler_SIGALRM;
+	new_sigalrm.sa_mask = smask;
+	new_sigalrm.sa_flags = 0;
+
+	if(sigaction(SIGINT, &new_sigint, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGHUP, &new_sighup, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGQUIT, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGBUS, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGSEGV, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGPIPE, &new, &old) == -1)
+		perror("sigaction");
+    if(sigaction(SIGALRM, &new_sigalrm, &old) == -1)
 		perror("sigaction");
     if(sigaction(SIGTERM, &new, &old) == -1)
 		perror("sigaction");
@@ -293,9 +395,9 @@ int search_dir(char* dir,char* mode,bool verbose,bool changes){
   
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
     // for readdir() 
-    long int res;
 
     while ((de = readdir(dr)) != NULL){
+        files_processed++;
         if(de->d_type == DT_DIR){ //if path is directory
               continue;
         }
@@ -327,17 +429,15 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
     
     // Refer http://pubs.opengroup.org/onlinepubs/7990989775/xsh/readdir.html 
     // for readdir() 
-    long int res;
-
 
     while ((de = readdir(dr)) != NULL){
+        files_processed++;
         if(de->d_type == DT_DIR){ //if path is directory
             if(de->d_name[0] != '.'){
                 //se não é nem o current_dir nem o pai do curr_dir
                 //criar novo processo para dar parse às files deste dir
                 //printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
                 pid_t id = fork();
-                int status;
                 switch (id) {
                     case -1:
                         perror ("fork"); 
@@ -345,30 +445,38 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                     case 0: //child process
                         // chamar search_dir() com novo 
                         {
+                            
+                            usleep(15000);
                             char* curr_dir = malloc(260 * sizeof(char));
                             strcat(curr_dir,dir);
                             strcat(curr_dir,"/");
                             strcat(curr_dir,de->d_name);
+                            
                             char* args_to_exec[arg_num+1];
                             for(int i = 0; i < arg_num;i++){
                                 args_to_exec[i] = args[i];
                             }
                             args_to_exec[arg_num - 1] = curr_dir;
+                            
                             args_to_exec[arg_num] = NULL;
+
+                
                             
                             //printf("\n");
                             //printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
                             
                             execvp(args[0],args_to_exec);
-                            free(curr_dir);
-                            
+                             
                             return 0;
                         }
 						
                         break;
                     default: //parent process
-                        if(write_logs) send_proc_create(timeSinceEpochParentStart,args,arg_num);
+                        //if(write_logs) send_proc_create(timeSinceEpochParentStart,args,arg_num);
                         //printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
+                        
+                        child_processes[child_process_index] = id;
+                        child_process_index++;
 						break;
 				}
             }    
@@ -380,8 +488,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
             strcat(filename,de->d_name);
             
             process_file(filename,args[arg_num - 2], verbose,changes);
-              
-           free(filename);  
+            free(filename);  
         }   
     }
     return 0; 
@@ -405,6 +512,7 @@ int is_regular_file(const char *path)
     if(S_ISREG(path_stat.st_mode)){
         return 2;
     }
+    return 0;
 }
 
 
@@ -441,52 +549,50 @@ long getProcTimeSinceBoot(){
 
 int main(int argc, char *argv[]){
     write_logs = false;
-    
-    if(check_if_env_var_set() == 0){
-        write_logs = true;
+    files_processed = 0;
+    files_modified = 0;
+    if (check_if_env_var_set() == 0)
+	{
+		write_logs = true;
+	}
+    if(argc < 3){
+        if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
+        return -1;
     }
-
 	if(getenv("PARENT_TIME") == NULL){
+        
         //saving the inicial processes procTimeSinceLinuxBoot
+        define_handlers_parent();
         timeSinceEpochParentStart = getMillisecondsSinceEpoch();
         char begin_str[20];
         sprintf(begin_str, "%ld", timeSinceEpochParentStart);
-        //char env_var_set_str[256] = "";
-        //strcat(env_var_set_str,"export PARENT_TIME=");
-        //strcat(env_var_set_str,begin_str);
-        //system(env_var_set_str);
-        //printf("PARENT_TIME: %s \n", getenv("PARENT_TIME")); //este falha
+    
 		setenv("PARENT_TIME", begin_str, 0);
 
 		if (write_logs){
-            printf("Created my log file!\n");
+            
             create_log_file();
-        }
-
-    printf("PARENT_TIME= %s \n",getenv("PARENT_TIME"));
+			
+		}
+        
 
 	}else{
+        define_sigint_handler_children();
         timeSinceEpochParentStart = atol(getenv("PARENT_TIME"));
     }
 
     if (write_logs){
-        send_proc_create(timeSinceEpochParentStart,argv,argc);
+
+		send_proc_create(timeSinceEpochParentStart,argv,argc);
         
     }
     
-	define_sigint_handler();
-    
-    char filename[200];
     char mode[120];
 
     strcpy(mode,argv[argc - 2]);
     strcpy(filename,argv[argc - 1]);
 
-    struct stat buffer;
-    struct passwd *pwd;
     bool verbose = false, changes = false, recursive = false;
-    int newPerms;
-	int searchOptions;
 
     pid_t wpid;
     int status = 0;
@@ -526,7 +632,7 @@ int main(int argc, char *argv[]){
     else if(is_regular_file(filename) == 1){ //it is a directory
        if(recursive){
 			if(search_dir_recursive(argv,argc,verbose,changes) != 0){
-                while ((wpid = wait(&status)) > 0);  
+                while((wpid = wait(&status)) > 0){};  
                 if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
                 return -1;
             }
@@ -536,12 +642,15 @@ int main(int argc, char *argv[]){
         }
     }
     else if(is_regular_file(filename) == 2){ //is a file
-        printf("We are in presence of a file \n");
+        files_processed++;
         process_file(filename,mode,verbose,changes);
     }
     
+    //sleep(10);
     //tell parent to wait for children
-    while ((wpid = wait(&status)) > 0);
-	if(write_logs) send_proc_exit(timeSinceEpochParentStart,0);
+    while((wpid = wait(&status)) > 0){};
+    
+	if(write_logs) 
+        send_proc_exit(timeSinceEpochParentStart,0);
     return 0;
 }

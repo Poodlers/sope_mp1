@@ -12,7 +12,6 @@
 
 extern const char * const sys_siglist[];
 
-int fd;
 
 int check_if_env_var_set(){
     if(getenv("LOG_FILENAME") == NULL){
@@ -23,14 +22,25 @@ int check_if_env_var_set(){
 
 int create_log_file(){
 
-    fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY);
+    int fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY);
     if(fd == -1){
         perror("Could not open Log File");
-    }
+		return -1;
+	}
+	close_log_file(fd);
+    return 0;
+};
 
+int open_file(){
+    int fd = open(getenv("LOG_FILENAME"),O_APPEND | O_WRONLY);
+    if(fd == -1){
+        perror("Could not open Log File");
+		return -1;
+	}
+    return fd;
 }
 
-int close_log_file(){
+int close_log_file(int fd){
     if( close(fd) < 0){
         return -1;
     }
@@ -70,7 +80,7 @@ double get_double_from_str(char* str,int desired_ind){
     pch = strtok(NULL, " ");
     index++;
   }
-
+  return -1;
 }
 
 long get_long_from_str(char* str,int desired_ind){
@@ -85,7 +95,7 @@ long get_long_from_str(char* str,int desired_ind){
     pch = strtok(NULL, " ");
     index++;
   }
-
+  return -1;
 }
 
 long getMillisecondsSinceEpoch(){
@@ -101,28 +111,39 @@ long get_time_until_now(long procTimeSinceBoot){
 }
 
 int send_proc_create(long procTimeBegin, char* args[],int num_args){
-    long time_elapsed = get_time_until_now(procTimeBegin);
+	int fd = open_file();
+    if(fd == -1) return -1;
+	long time_elapsed = get_time_until_now(procTimeBegin);
     char* output = malloc(sizeof(char) * 50);
+
     snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
+
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
+
     write(fd,output,strlen(output));
+
     write(fd," ; ",3);
+
     write(fd,"PROC_CREAT",strlen("PROC_CREAT"));
+
     write(fd, " ; ",3);
     for(int i = 0; i < num_args;i++){
         write(fd,args[i],strlen(args[i]));
         write(fd, " ",1);
     }
+
     write(fd,"\n",1);
     free(output);
-
+    return close_log_file(fd);
 }
 
 int send_proc_exit(long procTimeBegin,int exit_status){
-    long time_elapsed = get_time_until_now(procTimeBegin);
+	int fd = open_file();
+    if(fd == -1) return -1;
     char output[50];
+    long time_elapsed = get_time_until_now(procTimeBegin);
     snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
@@ -134,13 +155,16 @@ int send_proc_exit(long procTimeBegin,int exit_status){
     snprintf(output, 50, "%d", exit_status);
     write(fd,output,strlen(output));
     write(fd,"\n",1);
+    return close_log_file(fd);
 }
 
 void display_info_signal(char* filename, int total_files_found, int total_files_processed){
-    printf("%d ; %s ; %d ; %d", getpid(), filename,total_files_found,total_files_processed);
+    printf("\n%d ; %s ; %d ; %d \n", getpid(), filename,total_files_found,total_files_processed);
 }
 
 int send_signal_recv(long procTimeBegin,int signal){
+    int fd = open_file();
+    if(fd == -1) return -1;
     char str[50];
     get_sig_name(signal,str);
     long time_elapsed = get_time_until_now(procTimeBegin);
@@ -150,16 +174,18 @@ int send_signal_recv(long procTimeBegin,int signal){
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
     write(fd,output,strlen(output));
-    //
+    write(fd, " ; ",3);
     write(fd,"SIGNAL_RECV",strlen("SIGNAL_RECV"));
     write(fd, " ; ",3);
     write(fd,str,strlen(str));
     write(fd,"\n",1);
-
+    return close_log_file(fd);
 
 }
 
 int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
+    int fd = open_file();
+    if(fd == -1) return -1;
     char str[40];
     get_sig_name(signal,str);
     long time_elapsed = get_time_until_now(procTimeBegin);
@@ -174,6 +200,7 @@ int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     snprintf(output, 50, "%s : %d", str,pid);
     write(fd,output,strlen(output));
     write(fd,"\n",1);
+    return close_log_file(fd);
 }
 
 int get_real_file_path(char filename[200],char real_path[200]){
@@ -185,6 +212,8 @@ int get_real_file_path(char filename[200],char real_path[200]){
 }
 
 int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char filename[200]){
+    int fd = open_file();
+    if(fd == -1) return -1;
     long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
     snprintf(output, 50, "%ld", time_elapsed);
@@ -206,5 +235,6 @@ int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char fil
     snprintf(output,50," : %o : %o", oldPerms,newPerms);
     write(fd,output,strlen(output));
     write(fd,"\n",1);
+    return close_log_file(fd);
 
 }

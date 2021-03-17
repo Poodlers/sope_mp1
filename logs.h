@@ -6,9 +6,11 @@ int check_if_env_var_set();
 
 int create_log_file();
 
+int open_file();
+
 int send_proc_create(long procTimeBegin,char* args[],int num_args);
 
-int close_log_file();
+int close_log_file(int fd);
 
 void display_info_signal(char* filename, int total_files_found, int total_files_processed);
 

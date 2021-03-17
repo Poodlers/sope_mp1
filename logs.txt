@@ -1,5 +1,3 @@
-1 ; 2344 ; PROC_CREAT ; ./xmod -v -r 400 bruj/bruj2 
-5006 ; 2344 ; FILE_MODF ; /media/sf_SOPE_MP1/bruj/bruj2/bruh.txt : 770 : 400
-5010 ; 2344 ; PROC_EXIT ; 0
-t : 770 : 400 //
-10030 ; 2343 ; PROC_EXIT ; 0
+3 ; 5973 ; PROC_CREAT ; ./xmod -v 400 cringe.txt 
+11 ; 5973 ; FILE_MODF ; /media/sf_SOPE_MP1/cringe.txt : 770 : 400
+19 ; 5973 ; PROC_EXIT ; 0
