@@ -1,4 +1,4 @@
-#include <time.h>
+#include <sys/types.h>
 #ifndef LOGS_H
 #define LOGS_H
 
@@ -6,22 +6,26 @@ int check_if_env_var_set();
 
 int create_log_file();
 
-int send_proc_create(clock_t begin,char* args[],int num_args);
+int send_proc_create(long procTimeBegin,char* args[],int num_args);
 
 int close_log_file();
 
-int send_proc_exit(clock_t begin, int exit_status);
+int send_proc_exit(long procTimeBegin,int exit_status);
 
-int get_time_until_now(clock_t begin);
+long get_time_until_now(long procTimeSinceBoot);
 
-int send_signal_recv(clock_t begin,int signal);
+int send_signal_recv(long procTimeBegin,int signal);
 
 int get_sig_name(int signal, char output[100]);
 
-int send_signal_sent(clock_t begin,int signal,pid_t pid);
+int send_signal_sent(long procTimeBegin,int signal,pid_t pid);
 
-int send_file_mode_change(clock_t begin,int oldPerms, int newPerms, char filename[200]);
+int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms, char filename[200]);
 
 int get_real_file_path(char filename[200],char realpath[200]);
+
+double get_double_from_str(char* str,int desired_ind);
+
+long get_long_from_str(char* str,int desired_ind);
 
 #endif

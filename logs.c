@@ -58,53 +58,87 @@ int get_sig_name(int signal, char output[40]){
 
 }
 
+double get_double_from_str(char* str,int desired_ind){
+  char * pch;
+  pch = strtok(str," ");
+  int index = 0;
+  while (pch != NULL)
+  {
+    if(index == desired_ind) {
+        return atof(pch);
+    }
+    pch = strtok(NULL, " ");
+    index++;
+  }
 
-int get_time_until_now(){
+}
+
+long get_long_from_str(char* str,int desired_ind){
+  char * pch;
+  pch = strtok(str," ");
+  int index = 0;
+  while (pch != NULL)
+  {
+    if(index == desired_ind) {
+        return atol(pch);
+    }
+    pch = strtok(NULL, " ");
+    index++;
+  }
+
+}
+
+
+long get_time_until_now(long procTimeSinceBoot){
     //read the env_var to check what the parents PID is
     FILE* fd;
     char buff[128];
     time_t boottime;
     char *p;
     struct timeval tv;
-    unsigned long uptime;
-    
+    double uptime;
+    long long msecs_time_now;
+    long long boot_time_msecs;
+    char* line = NULL;
+    size_t len = 32;
+    size_t read;
+    line = (char *) malloc(len * sizeof(char));
 
-	fd = fopen ("/proc/uptime", "r");
-    if (fd != NULL)
-    {
-       while ((read = getline(&line, &len, fp)) != -1) {
-        printf("Retrieved line of length %zu:\n", read);
-        printf("%s", line);
-    }
-      
+    fd = fopen("/proc/uptime", "r");
+    while ((read = getline(&line, &len, fd)) != -1)
+	{
+		uptime = get_double_from_str(line,0);
+        gettimeofday(&tv,NULL);
+        msecs_time_now = (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
+	}
+    fclose(fd);
+    uptime = (uptime * 1000);
+    long uptime_long = (long)(uptime);
+    boot_time_msecs = msecs_time_now - uptime_long;
 
-      fclose (fp);
-    }
+    printf("uptime_linux - procTimeParent: %ld \n", uptime_long - procTimeSinceBoot);
 
-    char begin_str[10];
-    sprintf(begin_str, "%d", getenv("PARENT_PID"));
-    char proc_file_path[256] = "";
-    strcat(proc_file_path,"proc/");
-    strcat(proc_file_path,begin_str);
-    strcat(proc_file_path,"/stat");  
+    //milliseconds since linux started running
 
-    char proc_file_buff[500];
+    //get process_time now
+    gettimeofday(&tv,NULL);
+    msecs_time_now = (tv.tv_sec * 1000) + (tv.tv_usec / 1000); //how many milliseconds has it been since Epoch
 
-    FILE *fp = fopen(proc_file_path, "r");
-    while ((read = getline(&line, &len, fp)) != -1) {
-        printf("Retrieved line of length %zu:\n", read);
-        printf("%s", line);
-    }
+    long long process_time =  msecs_time_now - boot_time_msecs - procTimeSinceBoot;
 
-    if (line)
+    //printf("Total process time at this time has been %lld milliseconds \n",process_time);
+
+	if(line)
         free(line);
-    fclose(fp);
+
+	
+	return process_time;
 }
 
-int send_proc_create(clock_t begin, char* args[],int num_args){
-    int time_elapsed = get_time_until_now(begin);
+int send_proc_create(long procTimeBegin, char* args[],int num_args){
+    long time_elapsed = get_time_until_now(procTimeBegin);
     char* output = malloc(sizeof(char) * 50);
-    snprintf(output, 50, "%d", time_elapsed);
+    snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
@@ -121,10 +155,10 @@ int send_proc_create(clock_t begin, char* args[],int num_args){
 
 }
 
-int send_proc_exit(clock_t begin,int exit_status){
-    int time_elapsed = get_time_until_now(begin);
+int send_proc_exit(long procTimeBegin,int exit_status){
+    long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
-    snprintf(output, 50, "%d", time_elapsed);
+    snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
@@ -137,12 +171,12 @@ int send_proc_exit(clock_t begin,int exit_status){
     write(fd,"\n",1);
 }
 
-int send_signal_recv(clock_t begin,int signal){
+int send_signal_recv(long procTimeBegin,int signal){
     char str[50];
     get_sig_name(signal,str);
-    int time_elapsed = get_time_until_now(begin);
+    long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
-    snprintf(output, 50, "%d", time_elapsed);
+    snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
@@ -156,12 +190,12 @@ int send_signal_recv(clock_t begin,int signal){
 
 }
 
-int send_signal_sent(clock_t begin,int signal,pid_t pid){
+int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     char str[40];
     get_sig_name(signal,str);
-    int time_elapsed = get_time_until_now(begin);
+    long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
-    snprintf(output, 50, "%d", time_elapsed);
+    snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
@@ -181,10 +215,10 @@ int get_real_file_path(char filename[200],char real_path[200]){
     return 0;
 }
 
-int send_file_mode_change(clock_t begin,int oldPerms, int newPerms,char filename[200]){
-    int time_elapsed = get_time_until_now(begin);
+int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char filename[200]){
+    long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
-    snprintf(output, 50, "%d", time_elapsed);
+    snprintf(output, 50, "%ld", time_elapsed);
     write(fd,output,strlen(output));
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
