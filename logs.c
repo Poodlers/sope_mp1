@@ -9,9 +9,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/time.h>
+#include <stdbool.h>
 
-extern const char * const sys_siglist[];
-
+long timeSinceEpochParentStart;
+bool write_logs;
 
 int check_if_env_var_set(){
     if(getenv("LOG_FILENAME") == NULL){

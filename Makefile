@@ -24,9 +24,9 @@ all: $(TARGET)
 
 
 
-$(TARGET): $(TARGET).c logs.c
+$(TARGET): $(TARGET).c logs.c signals.c utils.c
 
-	$(CC) $(CFLAGS) -o $(TARGET) logs.c $(TARGET).c
+	$(CC) $(CFLAGS) -o $(TARGET) logs.c signals.c utils.c $(TARGET).c
 
 
 
