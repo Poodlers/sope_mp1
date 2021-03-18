@@ -95,11 +95,11 @@ void print_changes_command(int oldPerms,int newPerms,char filename[200]){
 	char newPermsString[9];
 	getPermsStringFormat(oldPerms, oldPermsString);
 
-    printf("mode of '%s' changed from %o (%s)", filename, oldPerms, oldPermsString);
+    printf("mode of '%s' changed from %03o (%s)", filename, oldPerms, oldPermsString);
 
     getPermsStringFormat(newPerms, newPermsString);
 
-	printf(" to %o (%s)\n", newPerms,newPermsString);
+	printf(" to %03o (%s)\n", newPerms,newPermsString);
 }
 
 void print_verbose_retain_command(int oldPerms,char filename[200]){
@@ -110,6 +110,10 @@ void print_verbose_retain_command(int oldPerms,char filename[200]){
 
 int is_valid_mode(char* mode){
     int index = 0;
+    if(atoi(mode) > 777){
+    
+        return -1;
+    }
     while(mode[index] != '\0'){
         switch(mode[index]){
             case '0':
@@ -160,7 +164,7 @@ int set_changes_mode_str(char* str, char* file, int oldPerms){
     else if(str[0] == 'g') perms = perms << 3;
     else if(str[0] == 'a') perms = perms <<6 | perms <<3 | perms;
     if(perms == -1){
-        return -1;
+		return -1;
     }
     if(str[1] == '+'){
         //add the new permissions to already existant ones
@@ -201,28 +205,29 @@ int process_file(char* filename, char* mode, bool verbose, bool changes){
     int oldPerms = getCurrentPerms(filename);
     int newPerms;
     //printf("mode %s \n",mode);
-    if(atoi(mode) == 0){  //if atoi fails, then its a mode specified with letters
+    if(atoi(mode) == 0 && strcmp(mode,"000") != 0 && strcmp(mode,"0000") != 0){  //if atoi fails, then its a mode specified with letters
         newPerms = set_changes_mode_str(mode,filename,oldPerms);
         if(newPerms == -1){
+            printf("xmod: invalid mode: ‘%s’ \n",mode);
             return -1;
         }
     }
     else{
         if(is_valid_mode(mode) == -1){
-            printf("Illegal mode! ");
+            printf("xmod: invalid mode: ‘%s’ \n",mode);
             if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
     }
     newPerms = strtoll(mode,NULL,8);
     //check if its a valid mode
     if(newPerms == -1){
-        printf("Illegal mode\n");
+        printf("xmod: invalid mode: ‘%s’ \n",mode);
         if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
         }
     }
     if (chmod(filename, newPerms) != 0){
-        perror("Chmod failed: ");
+        perror("xmod failed: ");
         if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
         return -1;
     }
@@ -321,7 +326,6 @@ void define_handlers_parent(){
 
 void signal_handler_SIGHUP(int signo){ //continue execution
     signal_handler_default(signo);
-    printf("Continuing execution! \n");
     for(int i =0; i < child_process_index;i++){
         send_signal(child_processes[i],SIGHUP);
     }
@@ -386,10 +390,9 @@ int search_dir(char* dir,char* mode,bool verbose,bool changes){
      struct dirent *de;  // Pointer for directory entry     
     // opendir() returns a pointer of DIR type.  
     DIR *dr = opendir(dir); 
-    printf("running search_dir in dir: %s \n", dir);
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
     { 
-        printf("Could not open current directory" ); 
+        printf("xmod: cannot access '%s': No such file or directory\n", dir); 
         return -1; 
     } 
   
@@ -419,11 +422,10 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
     struct dirent *de;  // Pointer for directory entry     
     // opendir() returns a pointer of DIR type.  
     char* dir = args[arg_num -1];
-    DIR *dr = opendir(dir); 
-    //printf("running search_dir in dir: %s \n", dir);
+    DIR *dr = opendir(dir);
     if (dr == NULL)  // opendir returns NULL if couldn't open directory 
     { 
-        printf("Could not open current directory" ); 
+        printf("xmod: cannot access '%s': No such file or directory\n", dir); 
         return -1; 
     } 
     
@@ -443,9 +445,8 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                         perror ("fork"); 
                         exit (1);
                     case 0: //child process
-                        // chamar search_dir() com novo 
+                        // chamar search_dir() com novo   
                         {
-                            
                             usleep(15000);
                             char* curr_dir = malloc(260 * sizeof(char));
                             strcat(curr_dir,dir);
@@ -457,23 +458,14 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                                 args_to_exec[i] = args[i];
                             }
                             args_to_exec[arg_num - 1] = curr_dir;
-                            
                             args_to_exec[arg_num] = NULL;
-
-                
-                            
-                            //printf("\n");
-                            //printf("child process with pid %d exploring dir %s \n", getpid(),de->d_name);
-                            
+     
                             execvp(args[0],args_to_exec);
-                             
-                            return 0;
+                            printf("execvp call failed\n"); 
+						    return -1;
                         }
-						
-                        break;
+						break;
                     default: //parent process
-                        //if(write_logs) send_proc_create(timeSinceEpochParentStart,args,arg_num);
-                        //printf("parent process with pid %d exploring dir %s \n", getpid(), dir);
                         
                         child_processes[child_process_index] = id;
                         child_process_index++;
@@ -487,7 +479,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
             strcat(filename,"/");
             strcat(filename,de->d_name);
             
-            process_file(filename,args[arg_num - 2], verbose,changes);
+            if(process_file(filename,args[arg_num - 2], verbose,changes)) return -1;
             free(filename);  
         }   
     }
@@ -556,6 +548,7 @@ int main(int argc, char *argv[]){
 		write_logs = true;
 	}
     if(argc < 3){
+        printf("xmod: missing operand \n");
         if(write_logs){
             create_log_file();
             send_proc_create(timeSinceEpochParentStart,argv,argc);
@@ -563,6 +556,7 @@ int main(int argc, char *argv[]){
         } 
         return -1;
     }
+    
 	if(getenv("PARENT_TIME") == NULL){
         
         //saving the inicial processes procTimeSinceLinuxBoot
@@ -574,21 +568,15 @@ int main(int argc, char *argv[]){
 		setenv("PARENT_TIME", begin_str, 0);
 
 		if (write_logs){
-            
-            create_log_file();
-			
+			if(create_log_file() == -1) return -1;
 		}
-        
-
 	}else{
         define_sigint_handler_children();
         timeSinceEpochParentStart = atol(getenv("PARENT_TIME"));
     }
 
     if (write_logs){
-
 		send_proc_create(timeSinceEpochParentStart,argv,argc);
-        
     }
     
     char mode[120];
@@ -597,10 +585,9 @@ int main(int argc, char *argv[]){
     strcpy(filename,argv[argc - 1]);
 
     bool verbose = false, changes = false, recursive = false;
-
+    sleep(10);
     pid_t wpid;
     int status = 0;
-
 
 	//check for flags "-v", "-r", "-c"    //check for flags "-v", "-r", "-c"
     // -c - displays only if there were changes in file perms
@@ -619,6 +606,7 @@ int main(int argc, char *argv[]){
         else{
             while ((wpid = wait(&status)) > 0);
 
+            printf("xmod: invalide mode %s", argv[i]);
             if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
         }
@@ -642,12 +630,20 @@ int main(int argc, char *argv[]){
             }
         }
         else{
-            search_dir(filename,mode,verbose,changes);
-        }
+            if(search_dir(filename,mode,verbose,changes) != 0){
+                while((wpid = wait(&status)) > 0){};
+                if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
+                return -1;
+            }
+		}
     }
     else if(is_regular_file(filename) == 2){ //is a file
         files_processed++;
-        process_file(filename,mode,verbose,changes);
+        if(process_file(filename,mode,verbose,changes) == -1){
+            while((wpid = wait(&status)) > 0){};
+	        if(write_logs) send_proc_exit(timeSinceEpochParentStart,0);
+			return -1;
+		}
     }
     
     //sleep(10);

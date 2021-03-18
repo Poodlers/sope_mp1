@@ -22,10 +22,9 @@ int check_if_env_var_set(){
 
 int create_log_file(){
 
-    int fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
+    int fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY,  S_IRWXU);
     if(fd == -1){
-        
-        perror("Could not open Log File");
+        perror("xmod: cannot access the log file: ");
 		return -1;
 	}
 	close_log_file(fd);
@@ -35,8 +34,7 @@ int create_log_file(){
 int open_file(){
     int fd = open(getenv("LOG_FILENAME"),O_APPEND | O_WRONLY);
     if(fd == -1){
-        printf("shit \n");
-        perror("Could not open Log File");
+        perror("xmod: cannot access the log file: ");
 		return -1;
 	}
     return fd;
@@ -44,6 +42,7 @@ int open_file(){
 
 int close_log_file(int fd){
     if( close(fd) < 0){
+        perror("xmod: cannot access the log file: ");
         return -1;
     }
     return 0;
@@ -59,13 +58,10 @@ void upcase(char *s)
 }
 
 int get_sig_name(int signal, char output[40]){
-    char *str = strdup(sys_siglist[signal]);
-    if (!str)
-        return -1;
-
-    upcase(str);
-    snprintf(output, 40, "SIG%s", str);
-    free(str);
+    char *str = strsignal(signal);
+    //can't fail because the possible signals were deffined by us and are all valid
+    snprintf(output, 40, "Signal %s", str);
+    
     return 0;
 
 }
@@ -103,8 +99,11 @@ long get_long_from_str(char* str,int desired_ind){
 long getMillisecondsSinceEpoch(){
     struct timeval tv;
     long msecs_time_now;
-    gettimeofday(&tv,NULL);
-    msecs_time_now = (tv.tv_sec * 1000) + (tv.tv_usec / 1000); //how many milliseconds has it been since Epoch
+    if(gettimeofday(&tv,NULL) == -1){
+		printf("xmod: could not get time of day");
+		return -1;
+	}
+	msecs_time_now = (tv.tv_sec * 1000) + (tv.tv_usec / 1000); //how many milliseconds has it been since Epoch
     return msecs_time_now;
 }
 
