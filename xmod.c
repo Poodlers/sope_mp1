@@ -585,7 +585,7 @@ int main(int argc, char *argv[]){
     strcpy(filename,argv[argc - 1]);
 
     bool verbose = false, changes = false, recursive = false;
-    sleep(10);
+    
     pid_t wpid;
     int status = 0;
 
@@ -645,8 +645,7 @@ int main(int argc, char *argv[]){
 			return -1;
 		}
     }
-    
-    //sleep(10);
+ 
     //tell parent to wait for children
     while((wpid = wait(&status)) > 0){};
     
