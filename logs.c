@@ -22,8 +22,9 @@ int check_if_env_var_set(){
 
 int create_log_file(){
 
-    int fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY);
+    int fd = open(getenv("LOG_FILENAME"),O_TRUNC | O_CREAT | O_WRONLY, S_IRWXU);
     if(fd == -1){
+        
         perror("Could not open Log File");
 		return -1;
 	}
@@ -34,6 +35,7 @@ int create_log_file(){
 int open_file(){
     int fd = open(getenv("LOG_FILENAME"),O_APPEND | O_WRONLY);
     if(fd == -1){
+        printf("shit \n");
         perror("Could not open Log File");
 		return -1;
 	}
