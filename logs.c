@@ -197,6 +197,7 @@ int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     write(fd, " ; ",3);
     snprintf(output,50,"%d",getpid());
     write(fd,output,strlen(output));
+    write(fd, " ; ",3);
     write(fd,"SIGNAL_SENT",strlen("SIGNAL_SENT")); 
     write(fd, " ; ",3);
     snprintf(output, 50, "%s : %d", str,pid);

@@ -11,11 +11,11 @@ void signal_handler_SIGINT_parent(int signo);
 
 void define_handlers_parent();
 
-void signal_handler_SIGHUP(int signo);
+void signal_handler_SIGCONT(int signo);
 
-void signal_handler_SIGALRM(int signo);
+void signal_handler_SIGTERM(int signo);
 
-void define_sigint_handler_children();
+void define_signal_handler_children();
 
 
 #endif

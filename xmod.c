@@ -273,7 +273,7 @@ int main(int argc, char *argv[]){
 			if(create_log_file() == -1) return -1;
 		}
 	}else{
-        define_sigint_handler_children();
+        define_signal_handler_children();
         timeSinceEpochParentStart = atol(getenv("PARENT_TIME"));
     }
 
@@ -349,8 +349,9 @@ int main(int argc, char *argv[]){
     }
  
     //tell parent to wait for children
-    while((wpid = wait(&status)) > 0){};
+    sleep(10);
     
+    while((wpid = wait(&status)) > 0){};
 	if(write_logs) 
         send_proc_exit(timeSinceEpochParentStart,0);
     return 0;
