@@ -556,7 +556,11 @@ int main(int argc, char *argv[]){
 		write_logs = true;
 	}
     if(argc < 3){
-        if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
+        if(write_logs){
+            create_log_file();
+            send_proc_create(timeSinceEpochParentStart,argv,argc);
+            send_proc_exit(timeSinceEpochParentStart,-1);
+        } 
         return -1;
     }
 	if(getenv("PARENT_TIME") == NULL){

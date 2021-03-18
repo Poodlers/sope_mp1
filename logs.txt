@@ -1,8 +1,2 @@
-4 ; 7008 ; PROC_CREAT ; ./xmod -v -r 777 bruj 
-15 ; 7008 ; FILE_MODF ; /media/sf_SOPE_MP1/bruj/cat : 770 : 777
-23 ; 7008 ; FILE_MODF ; /media/sf_SOPE_MP1/bruj/catgirls.txt : 770 : 777
-36 ; 7009 ; PROC_CREAT ; ./xmod -v -r 777 bruj/bruj2 
-46 ; 7009 ; FILE_MODF ; /media/sf_SOPE_MP1/bruj/bruj2/bruh.txt : 770 : 777
-53 ; 7009 ; PROC_EXIT ; 0
-61 ; 7008 ; SIGNAL_RECV ; SIGCHILD EXITED
-73 ; 7008 ; PROC_EXIT ; 0
+1616064021382 ; 2843 ; PROC_CREAT ; ./xmod 
+1616064021382 ; 2843 ; PROC_EXIT ; -1
