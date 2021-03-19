@@ -20,7 +20,7 @@ extern bool write_logs;
 int child_process_index = 0; 
 int files_processed;
 int files_modified;
-char filename[800];
+char filename[1000];
 pid_t child_processes[500];
 
 int set_changes_mode_str(char* str, char* file, int oldPerms){
@@ -130,7 +130,7 @@ int search_dir(char* dir,char* mode,bool verbose,bool changes){
               continue;
         }
         else if(de->d_type == DT_REG){
-            char * filename = malloc(260 * sizeof(char));
+            char * filename = malloc(1000 * sizeof(char));
             strcat(filename,dir);
             strcat(filename,"/");
             strcat(filename,de->d_name);
@@ -198,7 +198,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
             }    
         }
         else if(de->d_type == DT_REG){
-            char * filename = malloc(800 * sizeof(char));
+            char * filename = malloc(1000 * sizeof(char));
             strcat(filename,dir);
             strcat(filename,"/");
             strcat(filename,de->d_name);

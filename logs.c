@@ -206,7 +206,7 @@ int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     return close_log_file(fd);
 }
 
-int get_real_file_path(char filename[200],char real_path[200]){
+int get_real_file_path(char filename[1000],char real_path[1000]){
     strcpy(real_path,realpath(filename, NULL)); 
     if (real_path == NULL){
         return -1;        
@@ -227,7 +227,7 @@ int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char fil
     write(fd, " ; ",3);
     write(fd,"FILE_MODF",strlen("FILE_MODF")); 
     write(fd, " ; ",3);
-    char real_path[200];
+    char real_path[1000];
     if(get_real_file_path(filename,real_path) == 0){
         write(fd,real_path,strlen(real_path));
 
