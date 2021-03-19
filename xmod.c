@@ -47,6 +47,10 @@ int set_changes_mode_str(char* str, char* file, int oldPerms){
     for(int i = 0; i < length;i++){
         if(strcmp(perms_arr[i].perm,mode) == 0 ){
             perms = perms_arr[i].octal_mode;
+            break;
+        }
+        else if (i == length -1){
+            return -1;
         }
     }
     if(str[0] == 'u') perms = perms << 6;
@@ -308,7 +312,7 @@ int main(int argc, char *argv[]){
         else{
             while ((wpid = wait(&status)) > 0);
 
-            printf("xmod: invalide mode %s \n", argv[i]);
+            printf("xmod: invalide option '%s': make sure you write the command in the format 'xmod [options] mode filename/dir' \n", argv[i]);
             if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
         }
