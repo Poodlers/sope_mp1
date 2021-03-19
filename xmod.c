@@ -20,8 +20,9 @@ extern bool write_logs;
 int child_process_index = 0; 
 int files_processed;
 int files_modified;
-char filename[1000];
+char filename[4096];
 pid_t child_processes[500];
+int wait_time = 20000;
 
 int set_changes_mode_str(char* str, char* file, int oldPerms){
     struct Perms* perms_arr;
@@ -134,8 +135,8 @@ int search_dir(char* dir,char* mode,bool verbose,bool changes){
               continue;
         }
         else if(de->d_type == DT_REG){
-            char * filename = malloc(1000 * sizeof(char));
-            strcat(filename,dir);
+            char * filename = malloc(4096 * sizeof(char));
+            strcpy(filename,dir);
             strcat(filename,"/");
             strcat(filename,de->d_name);
             process_file(filename,mode, verbose,changes);
@@ -176,9 +177,9 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                     case 0: //child process
                         // chamar search_dir() com novo   
                         {
-                            usleep(15000);
-                            char* curr_dir = malloc(900 * sizeof(char));
-                            strcat(curr_dir,dir);
+                            usleep(wait_time);
+                            char* curr_dir = malloc(4096 * sizeof(char));
+                            strcpy(curr_dir,dir);
                             strcat(curr_dir,"/");
                             strcat(curr_dir,de->d_name);
                             
@@ -194,7 +195,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                         }
 						break;
                     default: //parent process
-                        
+                        usleep(wait_time);
                         child_processes[child_process_index] = id;
                         child_process_index++;
 						break;
@@ -202,8 +203,8 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
             }    
         }
         else if(de->d_type == DT_REG){
-            char * filename = malloc(1000 * sizeof(char));
-            strcat(filename,dir);
+            char * filename = malloc(4096 * sizeof(char));
+            strcpy(filename,dir);
             strcat(filename,"/");
             strcat(filename,de->d_name);
             

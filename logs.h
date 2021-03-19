@@ -26,9 +26,9 @@ int get_sig_name(int signal, char output[100]);
 
 int send_signal_sent(long procTimeBegin,int signal,pid_t pid);
 
-int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms, char filename[200]);
+int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms, char filename[4096]);
 
-int get_real_file_path(char filename[200],char realpath[200]);
+int get_real_file_path(char filename[4096],char realpath[4096]);
 
 double get_double_from_str(char* str,int desired_ind);
 

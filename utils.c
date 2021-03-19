@@ -62,7 +62,7 @@ void build_Perms(struct Perms** perms_arr,int length){
 
 
 
-void print_changes_command(int oldPerms,int newPerms,char filename[1000]){
+void print_changes_command(int oldPerms,int newPerms,char filename[4096]){
     char oldPermsString[9];
 	char newPermsString[9];
 	getPermsStringFormat(oldPerms, oldPermsString);
@@ -74,7 +74,7 @@ void print_changes_command(int oldPerms,int newPerms,char filename[1000]){
 	printf(" to %03o (%s)\n", newPerms,newPermsString);
 }
 
-void print_verbose_retain_command(int oldPerms,char filename[1000]){
+void print_verbose_retain_command(int oldPerms,char filename[4096]){
     char oldPermsString[9];
 	getPermsStringFormat(oldPerms, oldPermsString);
 	printf("mode of '%s' retained as %o (%s)\n", filename, oldPerms,oldPermsString);

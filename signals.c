@@ -15,7 +15,7 @@ extern bool write_logs;
 extern int child_process_index; 
 extern int files_processed;
 extern int files_modified;
-extern char filename[1000];
+extern char filename[4096];
 extern pid_t child_processes[500];
 int wait_times_ms = 30000;
 

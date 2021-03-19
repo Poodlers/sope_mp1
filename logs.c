@@ -206,7 +206,7 @@ int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     return close_log_file(fd);
 }
 
-int get_real_file_path(char filename[1000],char real_path[1000]){
+int get_real_file_path(char filename[4096],char real_path[4096]){
     strcpy(real_path,realpath(filename, NULL)); 
     if (real_path == NULL){
         return -1;        
@@ -214,7 +214,7 @@ int get_real_file_path(char filename[1000],char real_path[1000]){
     return 0;
 }
 
-int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char filename[200]){
+int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char filename[4096]){
     int fd = open_file();
     if(fd == -1) return -1;
     long time_elapsed = get_time_until_now(procTimeBegin);
@@ -227,7 +227,7 @@ int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char fil
     write(fd, " ; ",3);
     write(fd,"FILE_MODF",strlen("FILE_MODF")); 
     write(fd, " ; ",3);
-    char real_path[1000];
+    char real_path[4096];
     if(get_real_file_path(filename,real_path) == 0){
         write(fd,real_path,strlen(real_path));
 
