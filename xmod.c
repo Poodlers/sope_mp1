@@ -301,13 +301,13 @@ int main(int argc, char *argv[]){
     // -v - always displays even if nothing changes
     // -r - recursive
     for(int i = 1; i < argc - 2; i++){ //iterate until argc - 2 which specifies mode/octal-mode
-        if(strcmp("-v",argv[i]) == 0){
+        if(strcasecmp("-v",argv[i]) == 0){
             verbose = true;
         }
-        else if(strcmp("-r",argv[i]) == 0){
+        else if(strcasecmp("-r",argv[i]) == 0){
             recursive = true;
         }
-        else if(strcmp("-c",argv[i]) == 0){
+        else if(strcasecmp("-c",argv[i]) == 0){
             changes = true;
         }
         else{
