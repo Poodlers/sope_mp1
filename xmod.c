@@ -308,7 +308,7 @@ int main(int argc, char *argv[]){
         else{
             while ((wpid = wait(&status)) > 0);
 
-            printf("xmod: invalide mode %s", argv[i]);
+            printf("xmod: invalide mode %s \n", argv[i]);
             if(write_logs) send_proc_exit(timeSinceEpochParentStart,-1);
             return -1;
         }
