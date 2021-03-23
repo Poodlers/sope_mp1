@@ -354,7 +354,7 @@ int main(int argc, char *argv[]){
     }
  
     //tell parent to wait for children
-    //sleep(5); sleep used for testing ctrl+c handling
+    sleep(10); //sleep used for testing ctrl+c handling
     
     while((wpid = wait(&status)) > 0){};
 	if(write_logs) 
