@@ -1,2 +1,0 @@
-# sope_mp1
-SOPE MP_1 LEGOOOO
