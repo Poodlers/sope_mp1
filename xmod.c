@@ -170,6 +170,7 @@ int search_dir_recursive(char* args[],int arg_num, bool verbose, bool changes){
                 //criar novo processo para dar parse às files deste dir
                 //printf("process with pid: %d running on dir: %s is about to cause a fork for dir %s\n\n",getpid(), dir, de->d_name);
                 pid_t id = fork();
+                sleep(5);
                 switch (id) {
                     case -1:
                         perror ("fork"); 
