@@ -117,27 +117,25 @@ int send_proc_create(long procTimeBegin, char* args[],int num_args){
     if(fd == -1) return -1;
 	long time_elapsed = get_time_until_now(procTimeBegin);
     char* output = malloc(sizeof(char) * 50);
-
+    char final_output[5000];
     snprintf(output, 50, "%ld", time_elapsed);
-    write(fd,output,strlen(output));
-
-    write(fd, " ; ",3);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-
-    write(fd,output,strlen(output));
-
-    write(fd," ; ",3);
-
-    write(fd,"PROC_CREAT",strlen("PROC_CREAT"));
+    strcat(final_output, output);
+    strcat(final_output," ; ");
+    strcat(final_output, "PROC_CREAT");
+    strcat(final_output," ; ");
 
     write(fd, " ; ",3);
     for(int i = 0; i < num_args;i++){
-        write(fd,args[i],strlen(args[i]));
-        write(fd, " ",1);
+        strcat(final_output,args[i]);
+        strcat(final_output," ");
     }
 
-    write(fd,"\n",1);
+    strcat(final_output,"\n");
     free(output);
+    write(fd,final_output,strlen(final_output));
     return close_log_file(fd);
 }
 
@@ -146,17 +144,19 @@ int send_proc_exit(long procTimeBegin,int exit_status){
     if(fd == -1) return -1;
     char output[50];
     long time_elapsed = get_time_until_now(procTimeBegin);
+    char final_output[5000];
     snprintf(output, 50, "%ld", time_elapsed);
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-    write(fd,output,strlen(output));
-    write(fd," ; ",3);
-    write(fd,"PROC_EXIT",strlen("PROC_EXIT"));
-    write(fd, " ; ",3);
+    strcat(final_output,output);
+    strcat(final_output," ; ");
+    strcat(final_output,"PROC_EXIT");
+    strcat(final_output," ; ");
     snprintf(output, 50, "%d", exit_status);
-    write(fd,output,strlen(output));
-    write(fd,"\n",1);
+    strcat(final_output,output);
+    strcat(final_output,"\n");
+    write(fd,final_output,strlen(final_output));
     return close_log_file(fd);
 }
 
@@ -171,16 +171,18 @@ int send_signal_recv(long procTimeBegin,int signal){
     get_sig_name(signal,str);
     long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
+    char final_output[5000];
     snprintf(output, 50, "%ld", time_elapsed);
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
-    write(fd,"SIGNAL_RECV",strlen("SIGNAL_RECV"));
-    write(fd, " ; ",3);
-    write(fd,str,strlen(str));
-    write(fd,"\n",1);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
+    strcat(final_output,"SIGNAL_RECV");
+    strcat(final_output," ; ");
+    strcat(final_output, str);
+    strcat(final_output, "\n");
+    write(fd,final_output,strlen(final_output));
     return close_log_file(fd);
 
 }
@@ -192,17 +194,19 @@ int send_signal_sent(long procTimeBegin,int signal,pid_t pid){
     get_sig_name(signal,str);
     long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
+    char final_output[5000];
     snprintf(output, 50, "%ld", time_elapsed);
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
-    write(fd,"SIGNAL_SENT",strlen("SIGNAL_SENT")); 
-    write(fd, " ; ",3);
+    strcat(final_output,output);
+    strcat(final_output," ; ");
+    strcat(final_output,"SIGNAL_SENT");
+    strcat(final_output," ; ");
     snprintf(output, 50, "%s : %d", str,pid);
-    write(fd,output,strlen(output));
-    write(fd,"\n",1);
+    strcat(final_output,output);
+    strcat(final_output,"\n");
+    write(fd,final_output,strlen(final_output));
     return close_log_file(fd);
 }
 
@@ -219,25 +223,25 @@ int send_file_mode_change(long procTimeBegin,int oldPerms, int newPerms,char fil
     if(fd == -1) return -1;
     long time_elapsed = get_time_until_now(procTimeBegin);
     char output[50];
+    char final_output[5000];
     snprintf(output, 50, "%ld", time_elapsed);
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
+    strcpy(final_output,output);
+    strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-    write(fd,output,strlen(output));
-    write(fd, " ; ",3);
-    write(fd,"FILE_MODF",strlen("FILE_MODF")); 
-    write(fd, " ; ",3);
+    strcat(final_output,output);
+    strcat(final_output," ; ");
+    strcat(final_output,"FILE_MODF");
+    strcat(final_output," ; ");
     char real_path[4096];
     if(get_real_file_path(filename,real_path) == 0){
-        write(fd,real_path,strlen(real_path));
-
+        strcat(final_output,real_path);
     }else{
-        write(fd,filename,strlen(filename));
+        strcat(final_output,filename);
     }
-
     snprintf(output,50," : %o : %o", oldPerms,newPerms);
-    write(fd,output,strlen(output));
-    write(fd,"\n",1);
+    strcat(final_output,output);
+    strcat(final_output,"\n");
+    write(fd,final_output,strlen(final_output));
     return close_log_file(fd);
 
 }
