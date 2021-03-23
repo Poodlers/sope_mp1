@@ -176,7 +176,7 @@ int send_signal_recv(long procTimeBegin,int signal){
     strcpy(final_output,output);
     strcat(final_output," ; ");
     snprintf(output,50,"%d",getpid());
-    strcpy(final_output,output);
+    strcat(final_output,output);
     strcat(final_output," ; ");
     strcat(final_output,"SIGNAL_RECV");
     strcat(final_output," ; ");
