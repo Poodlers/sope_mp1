@@ -126,8 +126,6 @@ int send_proc_create(long procTimeBegin, char* args[],int num_args){
     strcat(final_output," ; ");
     strcat(final_output, "PROC_CREAT");
     strcat(final_output," ; ");
-
-    write(fd, " ; ",3);
     for(int i = 0; i < num_args;i++){
         strcat(final_output,args[i]);
         strcat(final_output," ");
